@@ -148,6 +148,7 @@ function TemplateEditor({
   onUpload: (f: File) => Promise<void>
 }) {
   const [t, setT] = useState(value)
+  const [error, setError] = useState('')
   const ai = useAIStatus()
   const set = (patch: Partial<Template>) => setT({ ...t, ...patch })
   const toggle = (id: number) =>
@@ -165,6 +166,7 @@ function TemplateEditor({
           onSaved(t)
         }}
       >
+        <ErrorBox message={error} />
         {ai.enabled && (
           <DraftPanel
             label="Draft with AI"
@@ -181,6 +183,30 @@ function TemplateEditor({
             }}
           />
         )}
+        <Field label="Import an existing email" hint="Paste or pick a .eml; links point at the tracked URL.">
+          <input
+            type="file"
+            accept=".eml,message/rfc822"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              const content = await file.text()
+              try {
+                const draft = await api.post<{ subject: string; text_body: string; html_body: string }>(
+                  '/api/v1/templates/import-email',
+                  { content, convert_links: true },
+                )
+                set({
+                  subject: draft.subject || t.subject,
+                  text_body: draft.text_body || t.text_body,
+                  html_body: draft.html_body || t.html_body,
+                })
+              } catch (err) {
+                setError(errorText(err))
+              }
+            }}
+          />
+        </Field>
         <Field label="Template name">
           <input value={t.name} onChange={(e) => set({ name: e.target.value })} required autoFocus />
         </Field>

@@ -11,6 +11,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -26,15 +27,16 @@ import (
 
 // Settings describes the report mailbox.
 type Settings struct {
-	Host       string
-	Port       int
-	Username   string
-	Password   string
-	Folder     string
-	UseTLS     bool
-	IgnoreCert bool
-	Delete     bool
-	Interval   time.Duration
+	Host           string
+	Port           int
+	Username       string
+	Password       string
+	Folder         string
+	UseTLS         bool
+	IgnoreCert     bool
+	Delete         bool
+	RestrictDomain string
+	Interval       time.Duration
 }
 
 // Enabled reports whether a mailbox is configured.
@@ -51,6 +53,7 @@ func Load(st *store.Store, cfg *config.Config) Settings {
 		UseTLS:     cfg.IMAP.UseTLS,
 		IgnoreCert: cfg.IMAP.IgnoreCert,
 		Delete:     cfg.IMAP.DeleteReported,
+		RestrictDomain: cfg.IMAP.RestrictDomain,
 		Interval:   time.Duration(cfg.IMAP.IntervalMinutes) * time.Minute,
 	}
 	if v, _ := st.Setting("imap_host"); v != "" {
@@ -73,6 +76,9 @@ func Load(st *store.Store, cfg *config.Config) Settings {
 	}
 	if v, _ := st.Setting("imap_folder"); v != "" {
 		s.Folder = v
+	}
+	if v, _ := st.Setting("imap_restrict_domain"); v != "" {
+		s.RestrictDomain = v
 	}
 	if v, _ := st.Setting("imap_enabled"); v == "false" {
 		s.Host = ""
@@ -176,15 +182,34 @@ func (m *Monitor) poll(st *store.Store) (int, error) {
 		if msg.Envelope == nil {
 			continue
 		}
-		rid := m.ridFromEnvelope(msg.Envelope, st)
-		if rid == "" {
+		if !m.allowedSender(msg.Envelope) {
 			continue
 		}
-		target, campaign, err := st.TargetByRID(rid)
-		if err != nil {
+		rids := map[string]bool{}
+		if rid := m.ridFromEnvelope(msg.Envelope, st); rid != "" {
+			rids[rid] = true
+		}
+		if body := msg.GetBody(section); body != nil {
+			for _, rid := range ScanRIDs(readLimited(body)) {
+				rids[rid] = true
+			}
+		}
+		if len(rids) == 0 {
+			// Not one of ours: worth a human look, but nothing to record.
+			m.Log.Info("reported message did not match a campaign",
+				"from", envelopeFrom(msg.Envelope), "subject", envelopeSubject(msg.Envelope))
 			continue
 		}
-		if target.ReportedAt.IsZero() {
+		matchedAny := false
+		for rid := range rids {
+			target, campaign, err := st.TargetByRID(rid)
+			if err != nil {
+				continue
+			}
+			matchedAny = true
+			if !target.ReportedAt.IsZero() {
+				continue
+			}
 			if err := st.Track(target, store.EvEmailReported, "Reported via mailbox", "", "imap", nil, false); err != nil {
 				m.Log.Warn("mark reported", "rid", rid, "err", err)
 				continue
@@ -198,7 +223,7 @@ func (m *Monitor) poll(st *store.Store) (int, error) {
 				})
 			}
 		}
-		if m.Settings.Delete {
+		if matchedAny && m.Settings.Delete {
 			toDelete = append(toDelete, msg.SeqNum)
 		}
 	}
@@ -247,4 +272,41 @@ func isRIDToken(s string) bool {
 		}
 	}
 	return true
+}
+
+// allowedSender enforces the optional company-domain restriction.
+func (m *Monitor) allowedSender(env *imap.Envelope) bool {
+	want := strings.ToLower(strings.TrimSpace(m.Settings.RestrictDomain))
+	if want == "" || env == nil || len(env.From) == 0 {
+		return true
+	}
+	from := strings.ToLower(env.From[0].Address())
+	if i := strings.LastIndex(from, "@"); i >= 0 {
+		return strings.TrimSuffix(from[i+1:], ".") == strings.TrimSuffix(want, ".")
+	}
+	return false
+}
+
+func envelopeFrom(env *imap.Envelope) string {
+	if env == nil || len(env.From) == 0 {
+		return ""
+	}
+	return env.From[0].Address()
+}
+
+func envelopeSubject(env *imap.Envelope) string {
+	if env == nil {
+		return ""
+	}
+	return env.Subject
+}
+
+// readLimited reads a message body without letting one huge email stall the
+// poller.
+func readLimited(rd io.Reader) []byte {
+	raw, err := io.ReadAll(io.LimitReader(rd, maxScanBytes))
+	if err != nil {
+		return nil
+	}
+	return raw
 }

@@ -11,15 +11,16 @@ Use it for authorised security awareness training and red-team engagements. **Yo
 ## What it does
 
 **Campaigns**
-- Immediate, scheduled, or send-by-date delivery with an optional rate limit (emails/hour) and random jitter.
+- Immediate, scheduled, or send-by-date delivery. A send-by date without an explicit rate spreads the audience evenly across the window; `send_rate` (emails/hour) and random jitter are available when you want direct control.
 - Stop, resume, and "resend failed" without duplicating recipients.
 - Three delivery outcomes per recipient: `sent`, `failed`, and `uncertain` — the last one covers timeouts and resets that happen after the message may have been handed to the relay, so you never blind-resend to people who already got it.
 - Full per-recipient timeline plus a campaign timeline, both append-only event rows.
 - Optional AI analysis of a finished campaign (see [AI](#ai-drafting-and-analysis)).
 
 **Content**
-- Email templates with the usual placeholders (`{{.FirstName}}`, `{{.URL}}`, `{{.Tracker}}`, `{{.From}}`, `{{.BaseURL}}`, …) plus `{{.OptOutURL}}` and `{{.ReportURL}}`.
-- Attachments, including templated attachment filenames.
+- Email templates, or import an existing `.eml` and get the subject/body with every link pointed at `{{.URL}}`.
+- Placeholders (`{{.FirstName}}`, `{{.URL}}`, `{{.Tracker}}`, `{{.From}}`, `{{.BaseURL}}`, …) plus `{{.OptOutURL}}` and `{{.ReportURL}}`.
+- Attachments with templated contents, not just filenames: plain-text formats are rendered directly and Office documents have their XML parts rewritten.
 - Landing pages: hand-written HTML, or clone a live page from a URL (assets absolutised, CSP and integrity attributes stripped).
 - Forms on a landing page are automatically repointed at the capture endpoint.
 - Optional per-campaign **relay mode** (see [Relay mode](#relay-mode)).
@@ -32,7 +33,7 @@ Use it for authorised security awareness training and red-team engagements. **Yo
 
 **Integrations**
 - Signed webhooks (`X-Webhook-Signature: sha256=…`) for every campaign event, with retries.
-- IMAP report mailbox: messages recipients report back are matched to the original recipient through the `Message-ID`, so no identifying header is added to outgoing mail.
+- IMAP report mailbox: reported messages are matched by scanning their body and any forwarded `.eml` attachment for the tracking parameter, plus the `Message-ID`. No identifying header is added to outgoing mail, and `imap.restrict_domain` ignores reports from outside your company.
 - Bearer-token REST API covering the same operations as the UI.
 - Model Context Protocol server over stdio for AI assistants (`trawlarr mcp`).
 

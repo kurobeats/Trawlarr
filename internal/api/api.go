@@ -79,6 +79,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/templates/{id}", s.viewer(s.handleGetTemplate))
 	mux.Handle("PUT /api/v1/templates/{id}", s.operator(s.handleUpdateTemplate))
 	mux.Handle("DELETE /api/v1/templates/{id}", s.operator(s.handleDeleteTemplate))
+	mux.Handle("POST /api/v1/templates/import-email", s.operator(s.handleImportEmail))
 
 	mux.Handle("GET /api/v1/pages", s.viewer(s.handleListPages))
 	mux.Handle("POST /api/v1/pages", s.operator(s.handleCreatePage))

@@ -511,6 +511,7 @@ func Import(ctx context.Context, opts Options) (*Report, error) {
 				"imap_folder": str(r, "folder"), "imap_enabled": strconv.FormatBool(truthy(r["enabled"])),
 				"imap_tls": strconv.FormatBool(truthy(r["tls"])),
 				"imap_ignore_cert": strconv.FormatBool(truthy(r["ignore_cert_errors"])),
+				"imap_restrict_domain": str(r, "restrict_domain"),
 			} {
 				if v != "" {
 					_ = opts.Dest.SetSetting(k, v)

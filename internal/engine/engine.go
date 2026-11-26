@@ -182,10 +182,7 @@ func (e *Engine) run(ctx context.Context, c *store.Campaign) {
 		e.fail(c, err)
 		return
 	}
-	var interval time.Duration
-	if c.SendRate > 0 {
-		interval = time.Hour / time.Duration(c.SendRate)
-	}
+	interval := PaceInterval(c, len(pending))
 
 	for _, target := range pending {
 		select {
@@ -306,9 +303,16 @@ func (e *Engine) render(c *store.Campaign, t *store.Template, p *store.Profile, 
 		if err != nil {
 			continue
 		}
-		// Attachment names may be templated too.
+		// Attachment names and text-based contents are templated too.
 		if rendered, err := tmpl.Execute(name, ctxData); err == nil && rendered != "" {
 			name = rendered
+		}
+		if rendered, err := mail.RenderAttachment(name, content, func(body string) (string, error) {
+			return tmpl.Execute(body, ctxData)
+		}); err != nil {
+			e.log.Warn("attachment templating failed; sending it unchanged", "name", name, "err", err)
+		} else {
+			content = rendered
 		}
 		msg.Attachments = append(msg.Attachments, mail.Attachment{Name: name, ContentType: ctype, Content: content})
 	}
@@ -365,6 +369,23 @@ func (e *Engine) emit(c *store.Campaign, event, recipient, rid, message string, 
 		Data:       data,
 		At:         time.Now().UTC(),
 	})
+}
+
+// PaceInterval decides how long to wait between two emails. An explicit rate
+// wins; otherwise a send-by date spreads the remaining recipients evenly over
+// the remaining window.
+func PaceInterval(c *store.Campaign, pending int) time.Duration {
+	if c.SendRate > 0 {
+		return time.Hour / time.Duration(c.SendRate)
+	}
+	if c.SendBy.IsZero() || pending <= 0 {
+		return 0
+	}
+	window := time.Until(c.SendBy.Time())
+	if window <= 0 {
+		return 0
+	}
+	return window / time.Duration(pending)
 }
 
 // sleep waits for interval plus up to jitterSeconds of random delay.

@@ -7,7 +7,7 @@ Trawlarr was designed by reading the public issue tracker of the tool it replace
 | Upstream issue | Problem | Decision |
 | --- | --- | --- |
 | #1602, #1929 | No built-in webhooks; custom events wanted | Webhook objects with per-event subscriptions, HMAC-SHA256 signatures, retries, fired for every recipient event. |
-| #976, #1226, #1782 | Recipients cannot report phish | `/report?rid=` endpoint, `{{.ReportURL}}` placeholder, and an IMAP report mailbox that matches messages back to the recipient through `Message-ID`. |
+| #976, #1226, #1782 | Recipients cannot report phish | `/report?rid=` endpoint, `{{.ReportURL}}` placeholder, and an IMAP report mailbox. Reported messages are matched by scanning the body and any forwarded `.eml` attachment for the tracking parameter, with `Message-ID` as a second signal; an optional domain restriction ignores outside senders. |
 | #1553 | `X-Mailer` names the tool | Header omitted unless the sending profile sets one. |
 | — | Vendor-specific contact and signature headers | No product headers in mail or webhooks. |
 | — | HELO/EHLO sends the machine hostname | HELO, TLS SNI and `Message-ID` all use the `From` domain. There is no `os.Hostname()` call in the codebase. |
@@ -23,6 +23,9 @@ Trawlarr was designed by reading the public issue tracker of the tool it replace
 | #858, #986 | Cannot set the envelope sender separately | `EnvelopeSender` on the sending profile. |
 | #611, #501, #391, #482 | No throttling or pacing | `send_rate` (emails/hour) and `jitter_seconds` per campaign. |
 | #79 | Cannot resend failed messages | `POST /campaigns/{id}/resend` requeues failed and uncertain recipients only. |
+| send-by scheduling | A send-by date only set a deadline | The remaining audience is spread evenly across the remaining window unless an explicit rate is configured. |
+| — | No way to reuse an existing email | `POST /api/v1/templates/import-email` parses a raw `.eml`, decodes multipart, quoted-printable, base64 and non-UTF-8 charsets, and can point every link at the tracked URL. |
+| #767 | CSV columns are guessed by content patterns | A header row is matched by name; without one the email column is located by its values, so reordered exports import correctly. |
 | #549 | Copying a campaign loses fields | Campaigns are records edited in place instead of being recreated from a form. |
 | #265, #1921, #1253 | Form capture fails silently | Forms are rewritten to the capture endpoint; field names are always recorded; values are optional and encrypted. |
 | #2171, #622 | Redirect page served instead of the landing page | Landing page on GET; redirect only after a successful POST. |

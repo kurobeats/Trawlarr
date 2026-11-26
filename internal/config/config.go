@@ -33,6 +33,7 @@ type IMAP struct {
 	UseTLS          bool   `json:"use_tls"`
 	IgnoreCert      bool   `json:"ignore_cert"`
 	DeleteReported  bool   `json:"delete_reported"`
+	RestrictDomain  string `json:"restrict_domain"`
 	IntervalMinutes int    `json:"interval_minutes"`
 }
 

@@ -32,7 +32,8 @@
     "use_tls": true,
     "ignore_cert": false,
     "delete_reported": false,
-    "interval_minutes": 5
+    "interval_minutes": 5,
+    "restrict_domain": ""
   },
   "ai": {
     "enabled": false,

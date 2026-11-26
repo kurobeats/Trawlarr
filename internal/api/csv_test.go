@@ -61,3 +61,31 @@ func TestParseTargetCSVEmpty(t *testing.T) {
 		t.Fatal("CSV without an email column should error")
 	}
 }
+
+func TestParseTargetCSVSniffsEmailColumn(t *testing.T) {
+	// No header, email first: column detection must not rely on position.
+	csv := "alice@example.com,Alice,Ng,CFO\nbob@example.com,Bob,Lee,IT\n"
+	targets, err := ParseTargetCSV(strings.NewReader(csv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 2 {
+		t.Fatalf("got %d recipients", len(targets))
+	}
+	if targets[0].Email != "alice@example.com" || targets[0].FirstName != "Alice" ||
+		targets[0].LastName != "Ng" || targets[0].Position != "CFO" {
+		t.Fatalf("wrong column mapping: %+v", targets[0])
+	}
+}
+
+func TestParseTargetCSVQuotedFields(t *testing.T) {
+	csv := "first_name,last_name,email,position\n" +
+		"\"Alice, Jr\",Ng,alice@example.com,\"VP, Finance\"\n"
+	targets, err := ParseTargetCSV(strings.NewReader(csv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if targets[0].FirstName != "Alice, Jr" || targets[0].Position != "VP, Finance" {
+		t.Fatalf("quoted fields mangled: %+v", targets[0])
+	}
+}

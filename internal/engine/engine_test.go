@@ -310,3 +310,23 @@ func TestUncertainClassification(t *testing.T) {
 		}
 	}
 }
+
+func TestPaceInterval(t *testing.T) {
+	base := &store.Campaign{}
+	if got := engine.PaceInterval(base, 10); got != 0 {
+		t.Fatalf("unpaced campaign = %s", got)
+	}
+	rated := &store.Campaign{SendRate: 3600}
+	if got := engine.PaceInterval(rated, 100); got != time.Second {
+		t.Fatalf("rate pacing = %s, want 1s", got)
+	}
+	window := &store.Campaign{SendBy: store.TimeOf(time.Now().Add(10 * time.Minute))}
+	got := engine.PaceInterval(window, 10)
+	if got < 50*time.Second || got > 70*time.Second {
+		t.Fatalf("send-by pacing = %s, want about a minute", got)
+	}
+	past := &store.Campaign{SendBy: store.TimeOf(time.Now().Add(-time.Hour))}
+	if engine.PaceInterval(past, 5) != 0 {
+		t.Fatal("expired window should not add delay")
+	}
+}
