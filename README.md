@@ -56,7 +56,7 @@ docker logs trawlarr | grep -A3 admin    # one-time password
 
 Everything that can change at runtime lives in **Settings**: organisation name, tracking URL, report mailbox (host, port, credentials, TLS, folder, sender-domain restriction, delete-after-processing, poll interval), the AI endpoint and the MCP server (enabled, write access, acting account). Changes apply without a restart; secrets are write-only and the UI only reports whether one is stored.
 
-`config.json` holds what needs a restart or is a safety boundary: listen addresses, database path, encryption key and the relay allowlist. Changing the admin URL offers a restart from the Power menu so the new address and its cookies take effect immediately. Full reference: [docs/configuration.md](docs/configuration.md).
+`config.json` is edited from the same page for the values that define the process: listener addresses, the database path and the relay allowlist. Listener and database changes are written to the file and offered a restart through the Power menu; the relay allowlist applies immediately. The database path field previews directories as you type, the way Syncthing's browse field does. The encryption key and static certificate files stay file-only. Full reference: [docs/configuration.md](docs/configuration.md).
 
 The **Power** menu in the sidebar (admin only) restarts or stops the process. Restart re-executes the binary, so it works under Docker as PID 1 and under systemd, and campaigns that were mid-send resume on start.
 

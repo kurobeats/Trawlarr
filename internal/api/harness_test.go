@@ -318,3 +318,13 @@ func fakeAIClient(t *testing.T) *ai.Client {
 	t.Cleanup(srv.Close)
 	return ai.New(config.AI{Enabled: true, BaseURL: srv.URL, Model: "stub"})
 }
+
+// newHarnessWithConfig builds a harness around a config loaded from disk, so
+// tests can check that settings are persisted to config.json.
+func newHarnessWithConfig(t *testing.T, cfg *config.Config) *harness {
+	t.Helper()
+	h := newHarness(t)
+	h.cfg = cfg
+	h.srv.Cfg = cfg
+	return h
+}

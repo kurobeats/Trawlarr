@@ -1,11 +1,15 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/kurobeats/trawlarr/internal/config"
 	"github.com/kurobeats/trawlarr/internal/imapmon"
 )
 
@@ -361,5 +365,130 @@ func TestAdminURLSetting(t *testing.T) {
 	res = h.expect(c, http.MethodPut, "/api/v1/settings", map[string]any{"org_name": "Acme"}, http.StatusOK)
 	if res["restart_required"] != false {
 		t.Fatalf("org rename asked for a restart: %v", res)
+	}
+}
+
+func TestApplicationSettingsPayload(t *testing.T) {
+	h := newHarness(t)
+	c := h.login()
+	got := h.expect(c, http.MethodGet, "/api/v1/settings", nil, http.StatusOK)
+	app, ok := got["application"].(map[string]any)
+	if !ok {
+		t.Fatalf("application section missing: %v", got)
+	}
+	for _, key := range []string{"admin_listen", "phish_listen", "db_path", "proxy_enabled", "proxy_allowlist"} {
+		if _, present := app[key]; !present {
+			t.Errorf("application.%s missing", key)
+		}
+	}
+	if app["db_path"] != h.cfg.DBPath {
+		t.Fatalf("db_path = %v, want %v", app["db_path"], h.cfg.DBPath)
+	}
+}
+
+func TestApplicationSettingsSave(t *testing.T) {
+	h := newHarness(t)
+	c := h.login()
+
+	res := h.expect(c, http.MethodPut, "/api/v1/settings", map[string]any{
+		"application": map[string]any{
+			"admin_listen":    "127.0.0.1:9000",
+			"phish_listen":    "http://0.0.0.0:9090/",
+			"db_path":         "/tmp/trawlarr-alt.db",
+			"proxy_enabled":   true,
+			"proxy_allowlist": []string{"Login.Example.com", "*.corp.internal", "login.example.com"},
+		},
+	}, http.StatusOK)
+	if res["restart_required"] != true {
+		t.Fatalf("listener changes should need a restart: %v", res)
+	}
+	reasons := res["restart_reasons"].([]any)
+	if len(reasons) == 0 || reasons[0] != "listeners and database path" {
+		t.Fatalf("reasons = %v", reasons)
+	}
+
+	got := h.expect(c, http.MethodGet, "/api/v1/settings", nil, http.StatusOK)
+	app := got["application"].(map[string]any)
+	if app["admin_listen"] != "127.0.0.1:9000" {
+		t.Fatalf("admin listen = %v", app["admin_listen"])
+	}
+	if app["phish_listen"] != "0.0.0.0:9090" {
+		t.Fatalf("phish listen = %v", app["phish_listen"])
+	}
+	if app["db_path"] != "/tmp/trawlarr-alt.db" {
+		t.Fatalf("db path = %v", app["db_path"])
+	}
+	allow := app["proxy_allowlist"].([]any)
+	if len(allow) != 2 || allow[0] != "login.example.com" || allow[1] != "*.corp.internal" {
+		t.Fatalf("allowlist = %v", allow)
+	}
+
+	// The relay policy applies without a restart.
+	enabled, list := h.cfg.RelayPolicy()
+	if !enabled || len(list) != 2 {
+		t.Fatalf("relay policy = %v %v", enabled, list)
+	}
+	if !h.cfg.ProxyHostAllowed("login.example.com") || !h.cfg.ProxyHostAllowed("a.corp.internal") {
+		t.Fatal("allowlisted host refused")
+	}
+}
+
+func TestApplicationSettingsValidation(t *testing.T) {
+	h := newHarness(t)
+	c := h.login()
+	cases := []map[string]any{
+		{"application": map[string]any{"admin_listen": ""}},
+		{"application": map[string]any{"admin_listen": "nonsense"}},
+		{"application": map[string]any{"admin_listen": "127.0.0.1"}},
+		{"application": map[string]any{"admin_listen": "ftp://127.0.0.1:21"}},
+		{"application": map[string]any{"phish_listen": "127.0.0.1:99999"}},
+		{"application": map[string]any{"phish_listen": "http://host:80/path"}},
+		{"application": map[string]any{"db_path": ""}},
+		{"application": map[string]any{"db_path": t.TempDir()}},
+		{"application": map[string]any{"proxy_allowlist": []string{"https://example.com"}}},
+		{"application": map[string]any{"proxy_allowlist": []string{"example.com:443"}}},
+	}
+	for _, body := range cases {
+		if status, resp := h.do(c, http.MethodPut, h.admin.URL+"/api/v1/settings", body); status != http.StatusBadRequest {
+			t.Errorf("%v accepted (%d): %s", body, status, resp)
+		}
+	}
+
+	// Relay-only changes apply without asking for a restart.
+	res := h.expect(c, http.MethodPut, "/api/v1/settings", map[string]any{
+		"application": map[string]any{"proxy_enabled": false},
+	}, http.StatusOK)
+	if res["restart_required"] != false {
+		t.Fatalf("relay change asked for a restart: %v", res)
+	}
+}
+
+func TestApplicationSettingsPersistToFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	loaded, err := config.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := newHarnessWithConfig(t, loaded)
+	c := h.login()
+	h.expect(c, http.MethodPut, "/api/v1/settings", map[string]any{
+		"application": map[string]any{"admin_listen": "127.0.0.1:9100", "db_path": filepath.Join(dir, "alt.db")},
+	}, http.StatusOK)
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var onDisk map[string]any
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatal(err)
+	}
+	if onDisk["db_path"] != filepath.Join(dir, "alt.db") {
+		t.Fatalf("db_path not written to config.json: %v", onDisk["db_path"])
+	}
+	admin := onDisk["admin_server"].(map[string]any)
+	if admin["listen_url"] != "127.0.0.1:9100" {
+		t.Fatalf("listener not written: %v", admin["listen_url"])
 	}
 }

@@ -72,6 +72,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/dashboard", s.viewer(s.handleDashboard))
 	mux.Handle("GET /api/v1/audit", s.viewer(s.handleAudit))
 	mux.Handle("POST /api/v1/power/{action}", s.admin(s.handlePowerAction))
+	mux.Handle("GET /api/v1/fs/complete", s.admin(s.handleFSComplete))
+	mux.Handle("GET /api/v1/fs/stat", s.admin(s.handleFSStat))
+
 	mux.Handle("GET /api/v1/geoip", s.viewer(s.handleGetGeoIP))
 	mux.Handle("POST /api/v1/geoip/upload", s.operator(s.handleUploadGeoIP))
 	mux.Handle("POST /api/v1/geoip/download", s.admin(s.handleDownloadGeoIP))

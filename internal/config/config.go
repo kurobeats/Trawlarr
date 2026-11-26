@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // Server describes one HTTP listener.
@@ -75,7 +76,10 @@ type Config struct {
 	// SeedAdminPassword, when set, is used for the initial admin account on a
 	// fresh database instead of a generated one.
 	SeedAdminPassword string `json:"-"`
-	path              string
+
+	path string
+	// mu guards the fields the UI can change while the server runs.
+	mu sync.RWMutex
 }
 
 // Default returns a config suitable for a first run.
@@ -169,6 +173,63 @@ func (c *Config) normalize() error {
 	return nil
 }
 
+// Update applies fn to a copy of the config, persists it and only then swaps it
+// in, so a bad edit never leaves the process with values it cannot write.
+func (c *Config) Update(fn func(*Config) error) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Copy the fields explicitly: copying the struct would copy the mutex.
+	next := &Config{
+		AdminServer: c.AdminServer, PhishServer: c.PhishServer,
+		DBPath: c.DBPath, DataDir: c.DataDir, EncryptionKey: c.EncryptionKey,
+		LogLevel: c.LogLevel, TrustedOrigins: c.TrustedOrigins,
+		TrustProxy: c.TrustProxy, SecureCookies: c.SecureCookies,
+		SessionTTLHours: c.SessionTTLHours,
+		ProxyEnabled:    c.ProxyEnabled, ProxyAllowlist: c.ProxyAllowlist,
+		IMAP: c.IMAP, AI: c.AI, MCP: c.MCP,
+		SeedAdminPassword: c.SeedAdminPassword, path: c.path,
+	}
+	if err := fn(next); err != nil {
+		return err
+	}
+	if err := next.Save(); err != nil {
+		return err
+	}
+	c.AdminServer = next.AdminServer
+	c.PhishServer = next.PhishServer
+	c.DBPath = next.DBPath
+	c.DataDir = next.DataDir
+	c.ProxyEnabled = next.ProxyEnabled
+	c.ProxyAllowlist = next.ProxyAllowlist
+	c.TrustedOrigins = next.TrustedOrigins
+	c.TrustProxy = next.TrustProxy
+	c.SecureCookies = next.SecureCookies
+	c.SessionTTLHours = next.SessionTTLHours
+	c.LogLevel = next.LogLevel
+	return nil
+}
+
+// Listeners returns the configured listen addresses.
+func (c *Config) Listeners() (admin, phish string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.AdminServer.ListenURL, c.PhishServer.ListenURL
+}
+
+// DatabasePath returns the configured SQLite path.
+func (c *Config) DatabasePath() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.DBPath
+}
+
+// RelayPolicy returns the relay switch and allowlist.
+func (c *Config) RelayPolicy() (bool, []string) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ProxyEnabled, append([]string(nil), c.ProxyAllowlist...)
+}
+
 // Addr returns just the host:port part of a listen URL.
 func (s Server) Addr() string {
 	raw := s.ListenURL
@@ -192,30 +253,36 @@ func (s Server) BaseURL() string {
 
 // Save writes the config back to disk with restrictive permissions.
 func (c *Config) Save() error {
-	if c.path == "" {
+	c.mu.RLock()
+	path := c.path
+	c.mu.RUnlock()
+	if path == "" {
 		return nil
 	}
+	c.mu.RLock()
 	b, err := json.MarshalIndent(c, "", "  ")
+	c.mu.RUnlock()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(c.path), 0o750); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
-	tmp := c.path + ".tmp"
+	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp, c.path)
+	return os.Rename(tmp, path)
 }
 
 // ProxyHostAllowed reports whether an upstream host may be relayed.
 func (c *Config) ProxyHostAllowed(host string) bool {
-	if !c.ProxyEnabled {
+	enabled, allowlist := c.RelayPolicy()
+	if !enabled {
 		return false
 	}
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
-	for _, allowed := range c.ProxyAllowlist {
+	for _, allowed := range allowlist {
 		allowed = strings.ToLower(strings.TrimSpace(strings.TrimPrefix(allowed, "*.")))
 		if allowed == "" {
 			continue

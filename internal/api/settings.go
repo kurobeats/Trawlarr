@@ -2,8 +2,11 @@ package api
 
 import (
 	"errors"
+	"fmt"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 
@@ -13,9 +16,9 @@ import (
 )
 
 // Settings that are safe to change while the server is running live in the
-// settings table so the UI can edit them. Values that need a restart to take
-// effect (listen addresses, database path, encryption key) and the relay
-// allowlist stay in config.json on purpose.
+// settings table so the UI can edit them. Listener addresses and the database
+// path are written to config.json and need a restart; the relay allowlist is
+// written there too but applied immediately.
 
 type imapSettings struct {
 	Enabled         bool   `json:"enabled"`
@@ -53,13 +56,14 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	me := UserFrom(r)
 	org, _ := s.Store.Org(me.OrgID)
 	out := map[string]any{
-		"phish_url": s.phishBaseURL(),
-		"admin_url": s.adminBaseURL(),
-		"events":    store.AllEvents,
-		"version":   Version,
-		"imap":      s.imapSettings(),
-		"ai":        s.aiSettings(),
-		"mcp":       s.mcpSettings(),
+		"phish_url":   s.phishBaseURL(),
+		"admin_url":   s.adminBaseURL(),
+		"events":      store.AllEvents,
+		"version":     Version,
+		"application": s.applicationSettings(),
+		"imap":        s.imapSettings(),
+		"ai":          s.aiSettings(),
+		"mcp":         s.mcpSettings(),
 	}
 	if org != nil {
 		out["org_name"] = org.Name
@@ -71,12 +75,13 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	me := UserFrom(r)
 	var req struct {
-		OrgName        *string       `json:"org_name"`
-		PhishPublicURL *string       `json:"phish_public_url"`
-		AdminPublicURL *string       `json:"admin_public_url"`
-		IMAP           *imapSettings `json:"imap"`
-		AI             *aiSettings   `json:"ai"`
-		MCP            *mcpSettings  `json:"mcp"`
+		OrgName        *string           `json:"org_name"`
+		PhishPublicURL *string           `json:"phish_public_url"`
+		AdminPublicURL *string           `json:"admin_public_url"`
+		IMAP           *imapSettings     `json:"imap"`
+		AI             *aiSettings       `json:"ai"`
+		MCP            *mcpSettings      `json:"mcp"`
+		Application    *applicationPatch `json:"application"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -135,6 +140,15 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		changed = append(changed, "imap")
+	}
+	if req.Application != nil {
+		reasons, err := s.saveApplicationSettings(req.Application)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		restartReasons = append(restartReasons, reasons...)
+		changed = append(changed, "application")
 	}
 	if req.MCP != nil {
 		if err := s.saveMCPSettings(me.OrgID, req.MCP); err != nil {
@@ -284,6 +298,148 @@ func (s *Server) saveIMAPSettings(in *imapSettings) error {
 		}
 	}
 	return nil
+}
+
+// ------------------------------------------------------------ application
+
+// applicationSettings are the listener and storage values from config.json.
+type applicationSettings struct {
+	AdminListen    string   `json:"admin_listen"`
+	PhishListen    string   `json:"phish_listen"`
+	DBPath         string   `json:"db_path"`
+	ProxyEnabled   bool     `json:"proxy_enabled"`
+	ProxyAllowlist []string `json:"proxy_allowlist"`
+}
+
+// applicationPatch only carries the fields the caller sent.
+type applicationPatch struct {
+	AdminListen    *string   `json:"admin_listen"`
+	PhishListen    *string   `json:"phish_listen"`
+	DBPath         *string   `json:"db_path"`
+	ProxyEnabled   *bool     `json:"proxy_enabled"`
+	ProxyAllowlist *[]string `json:"proxy_allowlist"`
+}
+
+func (s *Server) applicationSettings() applicationSettings {
+	admin, phish := s.Cfg.Listeners()
+	enabled, allowlist := s.Cfg.RelayPolicy()
+	if allowlist == nil {
+		allowlist = []string{}
+	}
+	return applicationSettings{
+		AdminListen:    admin,
+		PhishListen:    phish,
+		DBPath:         s.Cfg.DatabasePath(),
+		ProxyEnabled:   enabled,
+		ProxyAllowlist: allowlist,
+	}
+}
+
+// saveApplicationSettings persists listener, database and relay changes to the
+// config file and returns the reasons a restart is needed.
+func (s *Server) saveApplicationSettings(in *applicationPatch) ([]string, error) {
+	reasons := []string{}
+	if in.AdminListen != nil || in.PhishListen != nil || in.DBPath != nil {
+		reasons = append(reasons, "listeners and database path")
+	}
+	if in.AdminListen == nil && in.PhishListen == nil && in.DBPath == nil &&
+		in.ProxyEnabled == nil && in.ProxyAllowlist == nil {
+		return reasons, nil
+	}
+
+	err := s.Cfg.Update(func(c *config.Config) error {
+		if in.AdminListen != nil {
+			addr, err := normaliseListen(*in.AdminListen)
+			if err != nil {
+				return fmt.Errorf("admin listener: %w", err)
+			}
+			c.AdminServer.ListenURL = addr
+		}
+		if in.PhishListen != nil {
+			addr, err := normaliseListen(*in.PhishListen)
+			if err != nil {
+				return fmt.Errorf("phishing listener: %w", err)
+			}
+			c.PhishServer.ListenURL = addr
+		}
+		if in.DBPath != nil {
+			path := strings.TrimSpace(*in.DBPath)
+			if path == "" {
+				return errors.New("database path is required")
+			}
+			if info, err := os.Stat(path); err == nil && info.IsDir() {
+				return errors.New("database path is a directory")
+			}
+			c.DBPath = path
+		}
+		if in.ProxyEnabled != nil {
+			c.ProxyEnabled = *in.ProxyEnabled
+		}
+		if in.ProxyAllowlist != nil {
+			hosts, err := normaliseHosts(*in.ProxyAllowlist)
+			if err != nil {
+				return err
+			}
+			c.ProxyAllowlist = hosts
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return reasons, nil
+}
+
+// normaliseListen accepts host:port or scheme://host:port.
+func normaliseListen(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", errors.New("listen address is required")
+	}
+	value := raw
+	if !strings.Contains(value, "://") {
+		value = "http://" + value
+	}
+	u, err := url.Parse(value)
+	if err != nil || u.Host == "" {
+		return "", fmt.Errorf("%q is not a host:port address", raw)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("%q must use http or https", raw)
+	}
+	host, port, err := net.SplitHostPort(u.Host)
+	if err != nil || host == "" || port == "" {
+		return "", fmt.Errorf("%q needs a host and a port", raw)
+	}
+	if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+		return "", fmt.Errorf("%q has an invalid port", raw)
+	}
+	if strings.Contains(u.Path, "/") && strings.Trim(u.Path, "/") != "" {
+		return "", fmt.Errorf("%q must not contain a path", raw)
+	}
+	return net.JoinHostPort(host, port), nil
+}
+
+// normaliseHosts validates the relay allowlist entries.
+func normaliseHosts(in []string) ([]string, error) {
+	out := []string{}
+	seen := map[string]bool{}
+	for _, raw := range in {
+		for _, part := range strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == ' ' || r == '\n' || r == '\t' }) {
+			host := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(part), "."))
+			if host == "" {
+				continue
+			}
+			if strings.Contains(host, "://") || strings.ContainsAny(host, "/:") {
+				return nil, fmt.Errorf("%q is not a hostname", part)
+			}
+			if !seen[host] {
+				seen[host] = true
+				out = append(out, host)
+			}
+		}
+	}
+	return out, nil
 }
 
 // -------------------------------------------------------------------- MCP

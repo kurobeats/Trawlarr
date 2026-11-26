@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api, errorText, timeAgo } from '../api'
 import { ErrorBox, Field, Loading, useAsync } from '../ui'
 import type { Me } from '../App'
+import { ListenField, PathField } from '../pathfield'
 
 type ImapSettings = {
   enabled: boolean
@@ -31,10 +32,19 @@ type AISettings = {
   timeout_seconds: number
 }
 
+type ApplicationSettings = {
+  admin_listen: string
+  phish_listen: string
+  db_path: string
+  proxy_enabled: boolean
+  proxy_allowlist: string[]
+}
+
 type SettingsData = {
   org_name: string
   phish_url: string
   admin_url: string
+  application: ApplicationSettings
   version_hint?: string
   version: string
   events: string[]
@@ -121,6 +131,11 @@ function Application({ data, onSaved }: { data: SettingsData; onSaved: () => voi
   const [orgName, setOrgName] = useState(data.org_name)
   const [phishURL, setPhishURL] = useState(data.phish_url)
   const [adminURL, setAdminURL] = useState(data.admin_url)
+  const [adminListen, setAdminListen] = useState(data.application.admin_listen)
+  const [phishListen, setPhishListen] = useState(data.application.phish_listen)
+  const [dbPath, setDBPath] = useState(data.application.db_path)
+  const [relayOn, setRelayOn] = useState(data.application.proxy_enabled)
+  const [allowlist, setAllowlist] = useState(data.application.proxy_allowlist.join(', '))
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -138,6 +153,13 @@ function Application({ data, onSaved }: { data: SettingsData; onSaved: () => voi
         org_name: orgName,
         phish_public_url: phishURL,
         admin_public_url: adminURL,
+        application: {
+          admin_listen: adminListen,
+          phish_listen: phishListen,
+          db_path: dbPath,
+          proxy_enabled: relayOn,
+          proxy_allowlist: allowlist.split(/[\s,]+/).filter(Boolean),
+        },
       })
       setNote('Saved.')
       if (res?.restart_required) setRestart(res.restart_reasons ?? [])
@@ -188,6 +210,53 @@ function Application({ data, onSaved }: { data: SettingsData; onSaved: () => voi
         >
           <input value={phishURL} onChange={(e) => setPhishURL(e.target.value)} placeholder="https://training.example.com" />
         </Field>
+        <h3 style={{ marginTop: 20 }}>Listeners</h3>
+        <div className="row">
+          <div style={{ flex: 1 }}>
+            <ListenField
+              label="Admin listener"
+              hint="Where this console listens, e.g. 127.0.0.1:3333."
+              value={adminListen}
+              onChange={setAdminListen}
+              placeholder="127.0.0.1:3333"
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <ListenField
+              label="Phishing listener"
+              hint="Tracking and landing pages, e.g. 0.0.0.0:8080."
+              value={phishListen}
+              onChange={setPhishListen}
+              placeholder="0.0.0.0:8080"
+            />
+          </div>
+        </div>
+
+        <PathField
+          label="Database path"
+          hint="SQLite file. Type to browse: matching directories are offered as you go. Pointing at a new path starts from an empty database — existing data is not copied."
+          value={dbPath}
+          onChange={setDBPath}
+          placeholder="trawlarr.db"
+        />
+
+        <h3 style={{ marginTop: 20 }}>Relay campaigns</h3>
+        <label className="chip">
+          <input
+            type="checkbox"
+            style={{ width: 'auto' }}
+            checked={relayOn}
+            onChange={(e) => setRelayOn(e.target.checked)}
+          />
+          Allow relaying a live site (AiTM)
+        </label>
+        <p className="hint" style={{ marginTop: 6 }}>
+          Only hosts listed below can be relayed. This applies immediately; no restart needed.
+        </p>
+        <Field label="Allowed hostnames" hint="Comma or space separated; a leading *. allows subdomains. Empty means nothing is allowed.">
+          <input value={allowlist} onChange={(e) => setAllowlist(e.target.value)} placeholder="login.example.com, *.corp.internal" />
+        </Field>
+
         <button className="primary" type="submit" disabled={busy}>
           {busy ? 'Saving…' : 'Save'}
         </button>
@@ -219,8 +288,8 @@ function Application({ data, onSaved }: { data: SettingsData; onSaved: () => voi
               <td className="mono">{data.version}</td>
             </tr>
             <tr>
-              <td className="muted">Listeners, database path, encryption key, relay allowlist</td>
-              <td className="muted small">Set in config.json; they need a restart</td>
+              <td className="muted">Encryption key, TLS certificate files</td>
+              <td className="muted small">Set in config.json</td>
             </tr>
           </tbody>
         </table>

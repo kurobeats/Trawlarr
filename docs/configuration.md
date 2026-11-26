@@ -7,7 +7,7 @@ Two places: **Settings** in the UI for anything that can change while the server
 | Where | What |
 | --- | --- |
 | Settings → Account | Your password, TOTP enrolment, API key |
-| Settings → Application | Organisation name, tracking link base URL |
+| Settings → Application | Organisation name, admin URL, tracking link base URL, listener addresses, database path, relay switch and allowlist. Listener and database changes need a restart; the relay policy applies immediately. The database path field offers matching directories and previews the target before saving. |
 | Settings → Reporting | Mailbox monitoring: enabled, host, port, username, password, TLS, ignore certificates, folder, sender-domain restriction, delete after processing, poll interval |
 | Settings → AI | Enabled, base URL, model, API key, timeout |
 | Certificates | One profile per hostname set: domains, contact email, staging CA, cache directory, challenge address. Request and renew are buttons, never automatic. |
