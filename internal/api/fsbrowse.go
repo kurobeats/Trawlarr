@@ -124,6 +124,7 @@ func (s *Server) handleFSStat(w http.ResponseWriter, r *http.Request) {
 	}
 	out["resolved"] = abs
 
+	// #nosec G703 -- inspecting a path is the purpose of this admin-only endpoint.
 	info, statErr := os.Stat(abs)
 	switch {
 	case statErr == nil && info.IsDir():
@@ -146,6 +147,7 @@ func (s *Server) handleFSStat(w http.ResponseWriter, r *http.Request) {
 
 	// A new file needs a writable parent directory.
 	parent := filepath.Dir(abs)
+	// #nosec G703 -- same admin-scoped inspection as above.
 	parentInfo, parentErr := os.Stat(parent)
 	switch {
 	case parentErr != nil:
@@ -172,6 +174,7 @@ func writable(dir string) bool {
 	}
 	name := f.Name()
 	f.Close()
+	// #nosec G703 -- name comes from CreateTemp in dir, not from the request.
 	os.Remove(name)
 	return true
 }
