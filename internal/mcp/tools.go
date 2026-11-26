@@ -113,10 +113,10 @@ func (s *Server) dashboard(limitArgs) (*mcp_golang.ToolResponse, error) {
 }
 
 type campaignRow struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	CreatedAt any    `json:"created_at"`
+	ID        int64       `json:"id"`
+	Name      string      `json:"name"`
+	Status    string      `json:"status"`
+	CreatedAt any         `json:"created_at"`
 	Stats     store.Stats `json:"stats"`
 }
 
@@ -261,10 +261,10 @@ func (s *Server) listGroups(args listGroupsArgs) (*mcp_golang.ToolResponse, erro
 		return nil, err
 	}
 	type row struct {
-		ID        int64         `json:"id"`
-		Name      string        `json:"name"`
-		Size      int           `json:"size"`
-		Targets   []store.Target `json:"targets,omitempty"`
+		ID      int64          `json:"id"`
+		Name    string         `json:"name"`
+		Size    int            `json:"size"`
+		Targets []store.Target `json:"targets,omitempty"`
 	}
 	rows := make([]row, 0, len(groups))
 	for _, g := range groups {

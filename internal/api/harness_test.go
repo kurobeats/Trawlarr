@@ -12,8 +12,8 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
-	"testing"
 	"strings"
+	"testing"
 	"testing/fstest"
 
 	"github.com/kurobeats/trawlarr/internal/ai"
@@ -246,12 +246,12 @@ func (h *harness) seedCampaign(t *testing.T, c *http.Client) int64 {
 		"html_body": `<p>Hi {{.FirstName}}</p><a href="{{.URL}}">Pay</a>{{.Tracker}}`,
 	}, http.StatusCreated)
 	h.expect(c, http.MethodPost, "/api/v1/pages", map[string]any{
-		"name":               "Portal",
-		"html":               `<html><body><form><input name="username"><input name="password" type="password"><button>Sign in</button></form></body></html>`,
-		"capture":            true,
-		"capture_values":     false,
-		"capture_passwords":  false,
-		"redirect_url":       "https://example.com/thanks",
+		"name":              "Portal",
+		"html":              `<html><body><form><input name="username"><input name="password" type="password"><button>Sign in</button></form></body></html>`,
+		"capture":           true,
+		"capture_values":    false,
+		"capture_passwords": false,
+		"redirect_url":      "https://example.com/thanks",
 	}, http.StatusCreated)
 	h.expect(c, http.MethodPost, "/api/v1/profiles", map[string]any{
 		"name": "Relay", "host": "127.0.0.1", "port": 2525,

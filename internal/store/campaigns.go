@@ -45,29 +45,29 @@ var AllEvents = []string{
 
 // Campaign couples a template, landing page, sending profile and audience.
 type Campaign struct {
-	ID          int64   `json:"id"`
-	OrgID       int64   `json:"org_id"`
-	Name        string  `json:"name"`
-	TemplateID  int64   `json:"template_id"`
-	PageID      int64   `json:"page_id"`
-	ProfileID   int64   `json:"profile_id"`
-	GroupIDs    []int64 `json:"group_ids"`
-	URL         string  `json:"url"`
+	ID         int64   `json:"id"`
+	OrgID      int64   `json:"org_id"`
+	Name       string  `json:"name"`
+	TemplateID int64   `json:"template_id"`
+	PageID     int64   `json:"page_id"`
+	ProfileID  int64   `json:"profile_id"`
+	GroupIDs   []int64 `json:"group_ids"`
+	URL        string  `json:"url"`
 	// ProxyURL switches the campaign to relay mode: the landing page is fetched
 	// live from this origin and session cookies are captured.
 	ProxyURL       string `json:"proxy_url"`
 	CaptureCookies bool   `json:"capture_cookies"`
-	Status      string  `json:"status"`
-	LaunchAt    Time    `json:"launch_at"`
-	SendBy      Time    `json:"send_by"`
-	SendRate    int     `json:"send_rate"`
-	Jitter      int     `json:"jitter_seconds"`
-	ResendFailed bool   `json:"resend_failed"`
-	CreatedBy   int64   `json:"created_by"`
-	CreatedAt   Time    `json:"created_at"`
-	UpdatedAt   Time    `json:"updated_at"`
-	StartedAt   Time    `json:"started_at"`
-	CompletedAt Time    `json:"completed_at"`
+	Status         string `json:"status"`
+	LaunchAt       Time   `json:"launch_at"`
+	SendBy         Time   `json:"send_by"`
+	SendRate       int    `json:"send_rate"`
+	Jitter         int    `json:"jitter_seconds"`
+	ResendFailed   bool   `json:"resend_failed"`
+	CreatedBy      int64  `json:"created_by"`
+	CreatedAt      Time   `json:"created_at"`
+	UpdatedAt      Time   `json:"updated_at"`
+	StartedAt      Time   `json:"started_at"`
+	CompletedAt    Time   `json:"completed_at"`
 
 	Stats    Stats            `json:"stats"`
 	Targets  []CampaignTarget `json:"results,omitempty"`
@@ -199,6 +199,7 @@ func (s *Store) statsFor(ids ...int64) (map[int64]Stats, error) {
 	for i, id := range ids {
 		args[i] = id
 	}
+	// #nosec G202 -- only "?" placeholders are concatenated; ids are bound below.
 	rows, err := s.db.Query(`SELECT campaign_id,
 			COUNT(*),
 			SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END),

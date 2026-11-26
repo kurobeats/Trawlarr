@@ -32,17 +32,17 @@ func TestListEndpoints(t *testing.T) {
 	h.seedCampaign(t, c)
 
 	for path, want := range map[string]string{
-		"/api/v1/templates":     "Invoice",
-		"/api/v1/pages":         "Portal",
-		"/api/v1/profiles":      "Relay",
-		"/api/v1/webhooks":      "[]",
-		"/api/v1/users":         "admin",
-		"/api/v1/attachments":   "[]",
-		"/api/v1/audit":         "login.success",
-		"/api/v1/ai/status":     "enabled",
-		"/api/v1/settings":      "phish_url",
-		"/api/v1/health":        "ok",
-		"/api/v1/dashboard":     "stats",
+		"/api/v1/templates":   "Invoice",
+		"/api/v1/pages":       "Portal",
+		"/api/v1/profiles":    "Relay",
+		"/api/v1/webhooks":    "[]",
+		"/api/v1/users":       "admin",
+		"/api/v1/attachments": "[]",
+		"/api/v1/audit":       "login.success",
+		"/api/v1/ai/status":   "enabled",
+		"/api/v1/settings":    "phish_url",
+		"/api/v1/health":      "ok",
+		"/api/v1/dashboard":   "stats",
 	} {
 		status, body := h.do(c, http.MethodGet, h.admin.URL+path, nil)
 		if status != http.StatusOK {
@@ -120,11 +120,11 @@ func TestRewriteURL(t *testing.T) {
 	h := newHarness(t)
 	base, _ := url.Parse("https://login.example.com/app")
 	cases := map[string]string{
-		"/inbox":                              "/px/rid1/inbox",
-		"https://login.example.com/inbox":     "/px/rid1/inbox",
-		"/inbox?x=1#frag":                     "/px/rid1/inbox?x=1#frag",
-		"https://cdn.example.org/app.js":      "https://cdn.example.org/app.js",
-		"relative/path":                       "relative/path",
+		"/inbox":                          "/px/rid1/inbox",
+		"https://login.example.com/inbox": "/px/rid1/inbox",
+		"/inbox?x=1#frag":                 "/px/rid1/inbox?x=1#frag",
+		"https://cdn.example.org/app.js":  "https://cdn.example.org/app.js",
+		"relative/path":                   "relative/path",
 	}
 	for in, want := range cases {
 		if got := h.srv.rewriteURL(in, base, "rid1"); got != want {

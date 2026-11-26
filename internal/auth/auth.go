@@ -4,7 +4,8 @@ package auth
 import (
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- RFC 6238 TOTP is defined over HMAC-SHA1
+
 	"crypto/subtle"
 	"encoding/base32"
 	"encoding/base64"
@@ -81,21 +82,34 @@ func verifyArgon2id(hash, password string) bool {
 		}
 		switch kv[0] {
 		case "m":
+			if n < 8 || n > 1<<20 {
+				return false
+			}
 			memory = uint32(n)
 		case "t":
+			if n < 1 || n > 64 {
+				return false
+			}
 			iterations = uint32(n)
 		case "p":
+			if n < 1 || n > 255 {
+				return false
+			}
 			threads = uint8(n)
 		}
+	}
+	if memory == 0 || iterations == 0 || threads == 0 {
+		return false
 	}
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
 	if err != nil {
 		return false
 	}
 	want, err := base64.RawStdEncoding.DecodeString(parts[5])
-	if err != nil {
+	if err != nil || len(want) < 16 || len(want) > 64 {
 		return false
 	}
+	// #nosec G115 -- len(want) is bounded to 16..64 just above.
 	got := argon2.IDKey([]byte(password), salt, iterations, memory, threads, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
@@ -139,6 +153,9 @@ func VerifyTOTP(secret, code string, at time.Time) bool {
 }
 
 func totpCode(secret string, counter int64) string {
+	if counter < 0 {
+		return ""
+	}
 	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(strings.ToUpper(strings.TrimSpace(secret)))
 	if err != nil {
 		return ""

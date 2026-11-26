@@ -25,22 +25,22 @@ import (
 
 // Deps is everything the MCP tools need.
 type Deps struct {
-	Store  *store.Store
-	AI     *ai.Client
-	Cfg    *config.Config
-	Log    *slog.Logger
+	Store *store.Store
+	AI    *ai.Client
+	Cfg   *config.Config
+	Log   *slog.Logger
 	// Actor is the account tool calls act as. Defaults to the first admin.
 	Actor *store.User
 }
 
 // Server wraps the MCP protocol server.
 type Server struct {
-	store  *store.Store
-	ai     *ai.Client
-	cfg    *config.Config
-	log    *slog.Logger
-	actor  *store.User
-	mcp    *mcp_golang.Server
+	store *store.Store
+	ai    *ai.Client
+	cfg   *config.Config
+	log   *slog.Logger
+	actor *store.User
+	mcp   *mcp_golang.Server
 }
 
 // New builds a server that reads and writes on stdin/stdout.

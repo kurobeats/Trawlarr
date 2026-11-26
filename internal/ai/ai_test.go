@@ -172,9 +172,9 @@ func TestAPIKeyFromEnvironment(t *testing.T) {
 
 func TestExtractJSON(t *testing.T) {
 	cases := map[string]string{
-		`{"a":1}`:                    `{"a":1}`,
+		`{"a":1}`: `{"a":1}`,
 		"here you go:\n```json\n{\"a\":1}\n```\nthanks": `{"a":1}`,
-		"prefix {\"a\":1} suffix":    `{"a":1}`,
+		"prefix {\"a\":1} suffix":                       `{"a":1}`,
 	}
 	for in, want := range cases {
 		if got := string(extractJSON(in)); got != want {

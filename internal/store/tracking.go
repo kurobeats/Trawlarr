@@ -48,24 +48,24 @@ func (s *Store) MaterializeTargets(c *Campaign) (int, error) {
 	inserted := 0
 	{
 		for _, g := range groups {
-		for _, t := range g.Targets {
-			key := lower(t.Email)
-			if key == "" || seen[key] {
-				continue
-			}
-			seen[key] = true
-			if _, opted := optedOut[key]; opted {
-				continue
-			}
-			rid := uniqueRID(tx)
-			if _, err := tx.Exec(`INSERT INTO campaign_targets
+			for _, t := range g.Targets {
+				key := lower(t.Email)
+				if key == "" || seen[key] {
+					continue
+				}
+				seen[key] = true
+				if _, opted := optedOut[key]; opted {
+					continue
+				}
+				rid := uniqueRID(tx)
+				if _, err := tx.Exec(`INSERT INTO campaign_targets
 				(campaign_id, rid, email, first_name, last_name, position, custom, status, updated_at)
 				VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-				c.ID, rid, t.Email, t.FirstName, t.LastName, t.Position, MustJSON(orEmptyMap(t.Custom)), now()); err != nil {
-				return 0, err
+					c.ID, rid, t.Email, t.FirstName, t.LastName, t.Position, MustJSON(orEmptyMap(t.Custom)), now()); err != nil {
+					return 0, err
+				}
+				inserted++
 			}
-			inserted++
-		}
 		}
 	}
 	if err := tx.Commit(); err != nil {
@@ -272,6 +272,7 @@ func (s *Store) Track(t *CampaignTarget, evType, message, ip, ua string, data *C
 		args = append(args, ip, ua)
 	}
 	args = append(args, t.RID)
+	// #nosec G202 -- sets are built from fixed column names; values are bound.
 	if _, err := tx.Exec(`UPDATE campaign_targets SET `+strings.Join(sets, ", ")+` WHERE rid = ?`, args...); err != nil {
 		return err
 	}

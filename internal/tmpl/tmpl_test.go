@@ -86,13 +86,13 @@ func TestPerRecipientURL(t *testing.T) {
 func TestExecuteRendersRecipient(t *testing.T) {
 	ctx, _ := NewContext("IT <it@example.com>", "https://x.example.com", "rid", recipient())
 	cases := map[string]string{
-		"Hi {{.FirstName}}":                 "Hi Alice",
-		"{{.FirstName}} {{.LastName}}":      "Alice Ng",
-		"{{.Email}} ({{.Position}})":        "alice@example.com (CFO)",
-		"{{.FirstName}} at {{.BaseURL}}":    "Alice at https://x.example.com",
-		"{{index .Custom \"department\"}}":  "Finance",
-		"no placeholders":                   "no placeholders",
-		"{{.URL}}":                          ctx.URL,
+		"Hi {{.FirstName}}":                "Hi Alice",
+		"{{.FirstName}} {{.LastName}}":     "Alice Ng",
+		"{{.Email}} ({{.Position}})":       "alice@example.com (CFO)",
+		"{{.FirstName}} at {{.BaseURL}}":   "Alice at https://x.example.com",
+		"{{index .Custom \"department\"}}": "Finance",
+		"no placeholders":                  "no placeholders",
+		"{{.URL}}":                         ctx.URL,
 	}
 	for in, want := range cases {
 		got, err := Execute(in, ctx)

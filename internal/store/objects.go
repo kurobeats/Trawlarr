@@ -194,16 +194,16 @@ type Attachment struct {
 
 // Template is an email body with personalisation placeholders.
 type Template struct {
-	ID           int64   `json:"id"`
-	OrgID        int64   `json:"org_id"`
-	Name         string  `json:"name"`
-	Subject      string  `json:"subject"`
-	TextBody     string  `json:"text_body"`
-	HTMLBody     string  `json:"html_body"`
-	Attachments  []int64 `json:"attachments"`
+	ID             int64        `json:"id"`
+	OrgID          int64        `json:"org_id"`
+	Name           string       `json:"name"`
+	Subject        string       `json:"subject"`
+	TextBody       string       `json:"text_body"`
+	HTMLBody       string       `json:"html_body"`
+	Attachments    []int64      `json:"attachments"`
 	AttachmentInfo []Attachment `json:"attachment_info,omitempty"`
-	CreatedAt    Time    `json:"created_at"`
-	UpdatedAt    Time    `json:"updated_at"`
+	CreatedAt      Time         `json:"created_at"`
+	UpdatedAt      Time         `json:"updated_at"`
 }
 
 // Templates lists email templates.
@@ -357,10 +357,10 @@ type Page struct {
 	CapturePasswords bool   `json:"capture_passwords"`
 	// CaptureValues stores what was typed. Off by default: field names alone
 	// are enough for training metrics and keep real secrets out of the database.
-	CaptureValues    bool   `json:"capture_values"`
-	RedirectURL      string `json:"redirect_url"`
-	CreatedAt        Time   `json:"created_at"`
-	UpdatedAt        Time   `json:"updated_at"`
+	CaptureValues bool   `json:"capture_values"`
+	RedirectURL   string `json:"redirect_url"`
+	CreatedAt     Time   `json:"created_at"`
+	UpdatedAt     Time   `json:"updated_at"`
 }
 
 // Pages lists landing pages.

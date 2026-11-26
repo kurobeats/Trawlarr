@@ -40,22 +40,24 @@ func (s *Server) handleGetCampaign(w http.ResponseWriter, r *http.Request) {
 
 // campaignPayload is the writable campaign shape.
 type campaignPayload struct {
-	Name        string  `json:"name"`
-	TemplateID  int64   `json:"template_id"`
-	PageID      int64   `json:"page_id"`
-	ProfileID   int64   `json:"profile_id"`
-	GroupIDs    []int64 `json:"group_ids"`
-	URL         string  `json:"url"`
-	ProxyURL    string  `json:"proxy_url"`
-	CaptureCookies bool  `json:"capture_cookies"`
-	LaunchAt    *store.Time `json:"launch_at"`
-	SendBy      *store.Time `json:"send_by"`
-	SendRate    int     `json:"send_rate"`
-	Jitter      int     `json:"jitter_seconds"`
-	ResendFailed bool   `json:"resend_failed"`
+	Name           string      `json:"name"`
+	TemplateID     int64       `json:"template_id"`
+	PageID         int64       `json:"page_id"`
+	ProfileID      int64       `json:"profile_id"`
+	GroupIDs       []int64     `json:"group_ids"`
+	URL            string      `json:"url"`
+	ProxyURL       string      `json:"proxy_url"`
+	CaptureCookies bool        `json:"capture_cookies"`
+	LaunchAt       *store.Time `json:"launch_at"`
+	SendBy         *store.Time `json:"send_by"`
+	SendRate       int         `json:"send_rate"`
+	Jitter         int         `json:"jitter_seconds"`
+	ResendFailed   bool        `json:"resend_failed"`
 }
 
-func (s *Server) handleCreateCampaign(w http.ResponseWriter, r *http.Request) { s.saveCampaign(w, r, 0) }
+func (s *Server) handleCreateCampaign(w http.ResponseWriter, r *http.Request) {
+	s.saveCampaign(w, r, 0)
+}
 
 func (s *Server) handleUpdateCampaign(w http.ResponseWriter, r *http.Request) {
 	me := UserFrom(r)
@@ -94,20 +96,20 @@ func (s *Server) saveCampaign(w http.ResponseWriter, r *http.Request, id int64) 
 		req.ResendFailed = false
 	}
 	c := &store.Campaign{
-		OrgID:     me.OrgID,
-		Name:      req.Name,
-		TemplateID: req.TemplateID,
-		PageID:    req.PageID,
-		ProfileID: req.ProfileID,
-		GroupIDs:  req.GroupIDs,
-		URL:       strings.TrimSuffix(req.URL, "/"),
-		ProxyURL:  strings.TrimSuffix(strings.TrimSpace(req.ProxyURL), "/"),
+		OrgID:          me.OrgID,
+		Name:           req.Name,
+		TemplateID:     req.TemplateID,
+		PageID:         req.PageID,
+		ProfileID:      req.ProfileID,
+		GroupIDs:       req.GroupIDs,
+		URL:            strings.TrimSuffix(req.URL, "/"),
+		ProxyURL:       strings.TrimSuffix(strings.TrimSpace(req.ProxyURL), "/"),
 		CaptureCookies: req.CaptureCookies,
-		SendRate:  req.SendRate,
-		Jitter:    req.Jitter,
-		ResendFailed: req.ResendFailed,
-		Status:    store.StatusDraft,
-		CreatedBy: me.ID,
+		SendRate:       req.SendRate,
+		Jitter:         req.Jitter,
+		ResendFailed:   req.ResendFailed,
+		Status:         store.StatusDraft,
+		CreatedBy:      me.ID,
 	}
 	if req.LaunchAt != nil {
 		c.LaunchAt = *req.LaunchAt

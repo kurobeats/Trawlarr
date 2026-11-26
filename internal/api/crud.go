@@ -162,7 +162,9 @@ func (s *Server) handleGetTemplate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
-func (s *Server) handleCreateTemplate(w http.ResponseWriter, r *http.Request) { s.saveTemplate(w, r, 0) }
+func (s *Server) handleCreateTemplate(w http.ResponseWriter, r *http.Request) {
+	s.saveTemplate(w, r, 0)
+}
 
 func (s *Server) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r)

@@ -15,11 +15,11 @@ import (
 
 // smtpSink is a minimal SMTP server that records the envelope and raw message.
 type smtpSink struct {
-	ln    net.Listener
-	mu    sync.Mutex
-	env   []string
-	data  []string
-	port  int
+	ln   net.Listener
+	mu   sync.Mutex
+	env  []string
+	data []string
+	port int
 }
 
 func newSMTPSink(t *testing.T) *smtpSink {

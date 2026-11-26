@@ -55,27 +55,27 @@ type MCP struct {
 
 // Config is the on-disk configuration file.
 type Config struct {
-	AdminServer  Server   `json:"admin_server"`
-	PhishServer  Server   `json:"phish_server"`
-	DBPath       string   `json:"db_path"`
-	DataDir      string   `json:"data_dir"`
-	EncryptionKey string  `json:"encryption_key"`
-	LogLevel     string   `json:"log_level"`
-	TrustedOrigins []string `json:"trusted_origins"`
-	TrustProxy   bool     `json:"trust_proxy"`
-	SecureCookies bool    `json:"secure_cookies"`
-	SessionTTLHours int   `json:"session_ttl_hours"`
+	AdminServer     Server   `json:"admin_server"`
+	PhishServer     Server   `json:"phish_server"`
+	DBPath          string   `json:"db_path"`
+	DataDir         string   `json:"data_dir"`
+	EncryptionKey   string   `json:"encryption_key"`
+	LogLevel        string   `json:"log_level"`
+	TrustedOrigins  []string `json:"trusted_origins"`
+	TrustProxy      bool     `json:"trust_proxy"`
+	SecureCookies   bool     `json:"secure_cookies"`
+	SessionTTLHours int      `json:"session_ttl_hours"`
 	// Proxy campaigns relay a live site to capture session cookies. Off by
 	// default; ProxyAllowlist must name every upstream host you may target.
 	ProxyEnabled   bool     `json:"proxy_enabled"`
 	ProxyAllowlist []string `json:"proxy_allowlist"`
-	IMAP IMAP `json:"imap"`
-	AI   AI   `json:"ai"`
-	MCP  MCP  `json:"mcp"`
+	IMAP           IMAP     `json:"imap"`
+	AI             AI       `json:"ai"`
+	MCP            MCP      `json:"mcp"`
 	// SeedAdminPassword, when set, is used for the initial admin account on a
 	// fresh database instead of a generated one.
 	SeedAdminPassword string `json:"-"`
-	path string
+	path              string
 }
 
 // Default returns a config suitable for a first run.
@@ -96,6 +96,7 @@ func Default() *Config {
 // Load reads path, creating it with defaults when absent.
 func Load(path string) (*Config, error) {
 	c := Default()
+	// #nosec G304 -- the path is the operator's own -config flag.
 	b, err := os.ReadFile(path)
 	switch {
 	case err == nil:
@@ -198,7 +199,7 @@ func (c *Config) Save() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(c.path), 0o750); err != nil {
 		return err
 	}
 	tmp := c.path + ".tmp"

@@ -18,15 +18,15 @@ import (
 
 // Payload is the JSON body posted to webhooks.
 type Payload struct {
-	Event      string         `json:"event"`
-	CampaignID int64          `json:"campaign_id"`
-	Campaign   string         `json:"campaign"`
-	Recipient  string         `json:"recipient,omitempty"`
-	RID        string         `json:"rid,omitempty"`
-	Message    string         `json:"message,omitempty"`
-	IP         string         `json:"ip,omitempty"`
-	Data       any            `json:"data,omitempty"`
-	At         time.Time      `json:"at"`
+	Event      string    `json:"event"`
+	CampaignID int64     `json:"campaign_id"`
+	Campaign   string    `json:"campaign"`
+	Recipient  string    `json:"recipient,omitempty"`
+	RID        string    `json:"rid,omitempty"`
+	Message    string    `json:"message,omitempty"`
+	IP         string    `json:"ip,omitempty"`
+	Data       any       `json:"data,omitempty"`
+	At         time.Time `json:"at"`
 }
 
 // Dispatcher fans events out to webhooks without blocking the caller.

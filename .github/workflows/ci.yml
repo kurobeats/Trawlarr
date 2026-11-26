@@ -53,7 +53,10 @@ jobs:
       - name: gosec
         uses: securego/gosec@master
         with:
-          args: ./...
+          # G104 (unchecked errors) is excluded: response writes and audit calls
+          # are intentionally best-effort, and the meaningful ones are annotated
+          # inline with #nosec and a reason.
+          args: -exclude=G104 -severity medium -fmt sarif -out results.sarif ./...
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:

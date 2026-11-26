@@ -175,6 +175,7 @@ func (s *Store) OrgCount() (int, error) {
 // deleteScoped removes a row that belongs to an org and reports a miss as
 // ErrNotFound, so callers never claim to have deleted someone else's record.
 func (s *Store) deleteScoped(table string, orgID, id int64) error {
+	// #nosec G202 -- table is a package constant, never user input; values are bound.
 	res, err := s.db.Exec(`DELETE FROM `+table+` WHERE id = ? AND org_id = ?`, id, orgID)
 	if err != nil {
 		return err

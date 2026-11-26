@@ -53,10 +53,10 @@ func TestLoadIsStable(t *testing.T) {
 func TestInvalidFilesAreRejected(t *testing.T) {
 	dir := t.TempDir()
 	cases := map[string]string{
-		"broken.json":     `{not json`,
-		"badkey.json":     `{"encryption_key":"c2hvcnQ="}`,
-		"badscheme.json":  `{"encryption_key":"` + base64.StdEncoding.EncodeToString(make([]byte, 32)) + `","phish_server":{"listen_url":"ftp://example.com:21"}}`,
-		"emptyhost.json":  `{"encryption_key":"` + base64.StdEncoding.EncodeToString(make([]byte, 32)) + `","admin_server":{"listen_url":"http://"}}`,
+		"broken.json":    `{not json`,
+		"badkey.json":    `{"encryption_key":"c2hvcnQ="}`,
+		"badscheme.json": `{"encryption_key":"` + base64.StdEncoding.EncodeToString(make([]byte, 32)) + `","phish_server":{"listen_url":"ftp://example.com:21"}}`,
+		"emptyhost.json": `{"encryption_key":"` + base64.StdEncoding.EncodeToString(make([]byte, 32)) + `","admin_server":{"listen_url":"http://"}}`,
 	}
 	for name, body := range cases {
 		path := filepath.Join(dir, name)

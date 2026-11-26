@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  amd64:
+    name: Build linux/amd64 and publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Build the UI
+        working-directory: ui
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npm run build
+
+      - name: Build the binary
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -eu
+          mkdir -p dist
+          name="trawlarr_${VERSION}_linux_amd64"
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -trimpath \
+            -ldflags "-s -w -X main.version=${VERSION}" \
+            -o "dist/${name}" ./cmd/trawlarr
+          # Refuse to publish something that does not run or reports the wrong version.
+          test -x "dist/${name}"
+          "dist/${name}" version | grep -q "${VERSION}"
+          ( cd dist && sha256sum "${name}" > "SHA256SUMS" )
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/trawlarr_${{ github.ref_name }}_linux_amd64
+            dist/SHA256SUMS
+          generate_release_notes: true
+          fail_on_unmatched_files: true

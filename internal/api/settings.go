@@ -18,29 +18,29 @@ import (
 // allowlist stay in config.json on purpose.
 
 type imapSettings struct {
-	Enabled       bool   `json:"enabled"`
-	Host          string `json:"host"`
-	Port          int    `json:"port"`
-	Username      string `json:"username"`
-	Password      string `json:"password,omitempty"`
-	HasPassword   bool   `json:"has_password"`
-	ClearPassword bool   `json:"clear_password,omitempty"`
-	UseTLS        bool   `json:"use_tls"`
-	IgnoreCert    bool   `json:"ignore_cert"`
-	Folder        string `json:"folder"`
-	RestrictDomain string `json:"restrict_domain"`
-	DeleteReported bool  `json:"delete_reported"`
-	IntervalMinutes int  `json:"interval_minutes"`
+	Enabled         bool   `json:"enabled"`
+	Host            string `json:"host"`
+	Port            int    `json:"port"`
+	Username        string `json:"username"`
+	Password        string `json:"password,omitempty"`
+	HasPassword     bool   `json:"has_password"`
+	ClearPassword   bool   `json:"clear_password,omitempty"`
+	UseTLS          bool   `json:"use_tls"`
+	IgnoreCert      bool   `json:"ignore_cert"`
+	Folder          string `json:"folder"`
+	RestrictDomain  string `json:"restrict_domain"`
+	DeleteReported  bool   `json:"delete_reported"`
+	IntervalMinutes int    `json:"interval_minutes"`
 }
 
 type aiSettings struct {
-	Enabled      bool   `json:"enabled"`
-	BaseURL      string `json:"base_url"`
-	Model        string `json:"model"`
-	APIKey       string `json:"api_key,omitempty"`
-	HasAPIKey    bool   `json:"has_api_key"`
-	ClearAPIKey  bool   `json:"clear_api_key,omitempty"`
-	TimeoutSeconds int  `json:"timeout_seconds"`
+	Enabled        bool   `json:"enabled"`
+	BaseURL        string `json:"base_url"`
+	Model          string `json:"model"`
+	APIKey         string `json:"api_key,omitempty"`
+	HasAPIKey      bool   `json:"has_api_key"`
+	ClearAPIKey    bool   `json:"clear_api_key,omitempty"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
 }
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {

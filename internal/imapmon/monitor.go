@@ -10,8 +10,8 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log/slog"
 	"io"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -45,16 +45,16 @@ func (s Settings) Enabled() bool { return s.Host != "" && s.Username != "" }
 // Load merges config.json values with anything an imported database carried.
 func Load(st *store.Store, cfg *config.Config) Settings {
 	s := Settings{
-		Host:       cfg.IMAP.Host,
-		Port:       cfg.IMAP.Port,
-		Username:   cfg.IMAP.Username,
-		Password:   cfg.IMAP.Password,
-		Folder:     cfg.IMAP.Folder,
-		UseTLS:     cfg.IMAP.UseTLS,
-		IgnoreCert: cfg.IMAP.IgnoreCert,
-		Delete:     cfg.IMAP.DeleteReported,
+		Host:           cfg.IMAP.Host,
+		Port:           cfg.IMAP.Port,
+		Username:       cfg.IMAP.Username,
+		Password:       cfg.IMAP.Password,
+		Folder:         cfg.IMAP.Folder,
+		UseTLS:         cfg.IMAP.UseTLS,
+		IgnoreCert:     cfg.IMAP.IgnoreCert,
+		Delete:         cfg.IMAP.DeleteReported,
 		RestrictDomain: cfg.IMAP.RestrictDomain,
-		Interval:   time.Duration(cfg.IMAP.IntervalMinutes) * time.Minute,
+		Interval:       time.Duration(cfg.IMAP.IntervalMinutes) * time.Minute,
 	}
 	if v, _ := st.Setting("imap_host"); v != "" {
 		s.Host = v
@@ -170,6 +170,7 @@ func (m *Monitor) Run(ctx context.Context, st *store.Store) {
 // poll scans unseen messages once and returns how many were matched.
 func (m *Monitor) poll(st *store.Store, cfg Settings) (int, error) {
 	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
+	// #nosec G402 -- InsecureSkipVerify is the operator's explicit per-mailbox choice.
 	tlsConfig := &tls.Config{ServerName: cfg.Host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: cfg.IgnoreCert}
 
 	var (

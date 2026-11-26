@@ -76,6 +76,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u *store.U
 		writeError(w, http.StatusInternalServerError, "could not create session")
 		return
 	}
+	// #nosec G124 -- HttpOnly and SameSite are always set; Secure follows the deployment config.
 	http.SetCookie(w, &http.Cookie{
 		Name:     SessionCookie,
 		Value:    token,
@@ -91,6 +92,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(SessionCookie); err == nil {
 		_ = s.Store.DeleteSession(store.HashToken(c.Value))
 	}
+	// #nosec G124 -- clearing the cookie; no value and no transport need.
 	http.SetCookie(w, &http.Cookie{Name: SessionCookie, Value: "", Path: "/", MaxAge: -1})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

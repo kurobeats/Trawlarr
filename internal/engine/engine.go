@@ -393,6 +393,7 @@ func PaceInterval(c *store.Campaign, pending int) time.Duration {
 func sleep(ctx context.Context, interval time.Duration, jitterSeconds int) bool {
 	d := interval
 	if jitterSeconds > 0 {
+		// #nosec G404 -- send jitter only; nothing here needs unpredictability.
 		d += time.Duration(rand.Intn(jitterSeconds)) * time.Second
 	}
 	if d <= 0 {

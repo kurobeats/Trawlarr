@@ -363,9 +363,9 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 
 // limiter is a tiny fixed-window counter keyed by string.
 type limiter struct {
-	mu      sync.Mutex
-	hits    map[string]*bucket
-	lastGC  time.Time
+	mu     sync.Mutex
+	hits   map[string]*bucket
+	lastGC time.Time
 }
 
 type bucket struct {
@@ -398,4 +398,3 @@ func (l *limiter) allow(key string, limit int, window time.Duration) bool {
 	b.count++
 	return b.count <= limit
 }
-

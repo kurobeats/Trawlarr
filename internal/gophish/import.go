@@ -32,18 +32,18 @@ type Options struct {
 
 // Report summarises what was imported.
 type Report struct {
-	Users     int
-	Groups    int
-	Targets   int
-	Templates int
+	Users       int
+	Groups      int
+	Targets     int
+	Templates   int
 	Attachments int
-	Pages     int
-	Profiles  int
-	Campaigns int
-	Results   int
-	Events    int
-	Webhooks  int
-	Warnings  []string
+	Pages       int
+	Profiles    int
+	Campaigns   int
+	Results     int
+	Events      int
+	Webhooks    int
+	Warnings    []string
 }
 
 // Import copies a gophish database into an empty Trawlarr database.
@@ -509,8 +509,8 @@ func Import(ctx context.Context, opts Options) (*Report, error) {
 				"imap_host": str(r, "host"), "imap_port": strconv.FormatInt(i64(r, "port"), 10),
 				"imap_username": str(r, "username"), "imap_password": enc,
 				"imap_folder": str(r, "folder"), "imap_enabled": strconv.FormatBool(truthy(r["enabled"])),
-				"imap_tls": strconv.FormatBool(truthy(r["tls"])),
-				"imap_ignore_cert": strconv.FormatBool(truthy(r["ignore_cert_errors"])),
+				"imap_tls":             strconv.FormatBool(truthy(r["tls"])),
+				"imap_ignore_cert":     strconv.FormatBool(truthy(r["ignore_cert_errors"])),
 				"imap_restrict_domain": str(r, "restrict_domain"),
 			} {
 				if v != "" {

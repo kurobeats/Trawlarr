@@ -53,15 +53,15 @@ func TestStatusMappers(t *testing.T) {
 		}
 	}
 	events := map[string]string{
-		"Email Sent":         "email.sent",
+		"Email Sent":          "email.sent",
 		"Error Sending Email": "email.failed",
-		"Email Opened":       "email.opened",
-		"Clicked Link":       "link.clicked",
-		"Submitted Data":     "data.submitted",
-		"Email Reported":     "email.reported",
-		"Campaign Completed": "campaign.completed",
-		"Campaign Stopped":   "campaign.stopped",
-		"Something Else":     "campaign.started",
+		"Email Opened":        "email.opened",
+		"Clicked Link":        "link.clicked",
+		"Submitted Data":      "data.submitted",
+		"Email Reported":      "email.reported",
+		"Campaign Completed":  "campaign.completed",
+		"Campaign Stopped":    "campaign.stopped",
+		"Something Else":      "campaign.started",
 	}
 	for in, want := range events {
 		if got := mapEventType(in); got != want {

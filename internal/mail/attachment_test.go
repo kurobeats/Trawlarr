@@ -51,8 +51,8 @@ func TestAttachmentWithoutPlaceholdersIsUntouched(t *testing.T) {
 
 func TestOfficeArchiveIsRewritten(t *testing.T) {
 	doc := buildZip(t, map[string]string{
-		"word/document.xml": `<w:t>Hi {{.FirstName}}</w:t>`,
-		"word/media/image1.png": "\x89PNG binary",
+		"word/document.xml":            `<w:t>Hi {{.FirstName}}</w:t>`,
+		"word/media/image1.png":        "\x89PNG binary",
 		"word/_rels/document.xml.rels": "{{.URL}}",
 	})
 	out, err := RenderAttachment("invoice.docx", doc, renderer(t))

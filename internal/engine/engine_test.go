@@ -297,12 +297,12 @@ func TestLaunchRejectsCompletedCampaign(t *testing.T) {
 
 func TestUncertainClassification(t *testing.T) {
 	cases := map[string]bool{
-		"i/o timeout":                       true,
-		"read tcp: connection reset by peer": true,
-		"unexpected EOF":                    true,
+		"i/o timeout":                             true,
+		"read tcp: connection reset by peer":      true,
+		"unexpected EOF":                          true,
 		"dial tcp 1.2.3.4:25: connection refused": false,
-		"smtp: 535 authentication failed":   false,
-		"no such host":                      false,
+		"smtp: 535 authentication failed":         false,
+		"no such host":                            false,
 	}
 	for msg, want := range cases {
 		if got := engine.IsUncertain(errors.New(msg)); got != want {

@@ -107,6 +107,7 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request, t *store.Campaign
 	target.RawQuery = r.URL.RawQuery
 
 	var body io.Reader = r.Body
+	// #nosec G704 -- relay targets are restricted to proxy_allowlist and https, checked above.
 	req, err := http.NewRequestWithContext(r.Context(), r.Method, target.String(), body)
 	if err != nil {
 		serveNotFound(w)
@@ -133,6 +134,7 @@ func (s *Server) relay(w http.ResponseWriter, r *http.Request, t *store.Campaign
 		req.Header.Set("Cookie", strings.Join(parts, "; "))
 	}
 
+	// #nosec G704 -- same allowlisted target as above.
 	resp, err := upstreamClient.Do(req)
 	if err != nil {
 		s.Log.Warn("relay upstream failed", "campaign", c.ID, "err", err)
