@@ -199,6 +199,8 @@ func powerControl(stop context.CancelFunc, log *slog.Logger) *api.PowerControl {
 			}
 			log.Info("re-executing the server", "path", exe)
 			// syscall.Exec only returns on failure.
+			// #nosec G204 G702 -- the path comes from os.Executable() and the
+			// arguments are this process's own; no user input reaches it.
 			return syscall.Exec(exe, os.Args, os.Environ())
 		},
 	}
