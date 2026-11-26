@@ -39,6 +39,7 @@ type Server struct {
 
 	limiter  *limiter
 	proxyJar *proxyJars
+	tlsMu    sync.Mutex // serialises certificate issuance
 }
 
 // New wires a Server.
@@ -68,6 +69,12 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/dashboard", s.viewer(s.handleDashboard))
 	mux.Handle("GET /api/v1/audit", s.viewer(s.handleAudit))
 	mux.Handle("POST /api/v1/power/{action}", s.admin(s.handlePowerAction))
+	mux.Handle("GET /api/v1/certificates", s.viewer(s.handleListCertificates))
+	mux.Handle("POST /api/v1/certificates", s.operator(s.handleCreateCertificate))
+	mux.Handle("GET /api/v1/certificates/{id}", s.viewer(s.handleGetCertificate))
+	mux.Handle("PUT /api/v1/certificates/{id}", s.operator(s.handleUpdateCertificate))
+	mux.Handle("DELETE /api/v1/certificates/{id}", s.operator(s.handleDeleteCertificate))
+	mux.Handle("POST /api/v1/certificates/{id}/{action}", s.admin(s.handleIssueCertificate))
 
 	mux.Handle("GET /api/v1/groups", s.viewer(s.handleListGroups))
 	mux.Handle("POST /api/v1/groups", s.operator(s.handleCreateGroup))
@@ -313,6 +320,13 @@ func (s *Server) originAllowed(raw, requestHost string) bool {
 	host := u.Host
 	if host == requestHost {
 		return true
+	}
+	if s.Store != nil {
+		if v, _ := s.Store.Setting("admin_public_url"); v != "" {
+			if u, err := url.Parse(v); err == nil && strings.EqualFold(u.Host, host) {
+				return true
+			}
+		}
 	}
 	for _, allowed := range s.Cfg.TrustedOrigins {
 		if strings.EqualFold(strings.TrimSuffix(allowed, "/"), u.Scheme+"://"+host) ||

@@ -10,6 +10,7 @@ Two places: **Settings** in the UI for anything that can change while the server
 | Settings → Application | Organisation name, tracking link base URL |
 | Settings → Reporting | Mailbox monitoring: enabled, host, port, username, password, TLS, ignore certificates, folder, sender-domain restriction, delete after processing, poll interval |
 | Settings → AI | Enabled, base URL, model, API key, timeout |
+| Certificates | One profile per hostname set: domains, contact email, staging CA, cache directory, challenge address. Request and renew are buttons, never automatic. |
 | Settings → MCP | Enable the stdio MCP server, allow tools that change data, choose the account tool calls act as |
 | Settings → Team | Users and roles |
 | Settings → Audit log | Who did what |

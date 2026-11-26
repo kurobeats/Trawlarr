@@ -312,3 +312,54 @@ func TestMCPSettings(t *testing.T) {
 		t.Fatal("clearing the MCP user did not stick")
 	}
 }
+
+func TestAdminURLSetting(t *testing.T) {
+	h := newHarness(t)
+	c := h.login()
+
+	got := h.expect(c, http.MethodGet, "/api/v1/settings", nil, http.StatusOK)
+	if got["admin_url"] != "http://127.0.0.1:0" && got["admin_url"] == "" {
+		t.Fatalf("admin_url missing: %v", got["admin_url"])
+	}
+
+	res := h.expect(c, http.MethodPut, "/api/v1/settings", map[string]any{
+		"admin_public_url": "https://console.example.com/",
+	}, http.StatusOK)
+	if res["restart_required"] != true {
+		t.Fatalf("admin URL should advise a restart: %v", res)
+	}
+	reasons := res["restart_reasons"].([]any)
+	if len(reasons) != 1 || reasons[0] != "admin URL" {
+		t.Fatalf("reasons = %v", reasons)
+	}
+
+	got = h.expect(c, http.MethodGet, "/api/v1/settings", nil, http.StatusOK)
+	if got["admin_url"] != "https://console.example.com" {
+		t.Fatalf("admin_url = %v", got["admin_url"])
+	}
+
+	// The configured admin origin is accepted for state-changing requests even
+	// when the browser sends a different Host.
+	req, _ := http.NewRequest(http.MethodPost, h.admin.URL+"/api/v1/groups",
+		strings.NewReader(`{"name":"cross","targets":[]}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://console.example.com")
+	resp, err := c.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("admin origin rejected: %d", resp.StatusCode)
+	}
+
+	// Validation and the no-restart case.
+	if status, _ := h.do(c, http.MethodPut, h.admin.URL+"/api/v1/settings",
+		map[string]any{"admin_public_url": "ftp://nope"}); status != http.StatusBadRequest {
+		t.Fatalf("bad admin URL = %d", status)
+	}
+	res = h.expect(c, http.MethodPut, "/api/v1/settings", map[string]any{"org_name": "Acme"}, http.StatusOK)
+	if res["restart_required"] != false {
+		t.Fatalf("org rename asked for a restart: %v", res)
+	}
+}

@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Campaigns, CampaignDetail } from './pages/Campaigns'
 import { Templates, Pages, Profiles, Groups, WebhooksPage } from './pages/Library'
 import { Settings } from './pages/Settings'
+import { Certificates } from './pages/Certificates'
 import { PowerMenu } from './power'
 
 export type Me = {
@@ -28,6 +29,7 @@ const NAV = [
   ['/pages', 'Landing Pages'],
   ['/profiles', 'Sending Profiles'],
   ['/groups', 'Groups'],
+  ['/certificates', 'Certificates'],
   ['/webhooks', 'Webhooks'],
   ['/settings', 'Settings'],
 ]
@@ -72,6 +74,8 @@ export function App() {
     page = <Profiles />
   } else if (active('/groups')) {
     page = <Groups />
+  } else if (active('/certificates')) {
+    page = <Certificates />
   } else if (active('/webhooks')) {
     page = <WebhooksPage />
   } else if (active('/settings')) {

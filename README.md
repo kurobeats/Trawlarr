@@ -44,6 +44,8 @@ docker logs trawlarr | grep -A3 admin    # one-time password
 
 **Access** — `admin`, `operator` and `viewer` roles enforced on every endpoint; Argon2id passwords, TOTP, hashed API keys, session rotation, audit log.
 
+**TLS** — certificate profiles: per set of hostnames, requested and renewed from a button, served by SNI, and selectable per campaign. Static certs from `config.json` still work.
+
 **Integrations** — signed webhooks for every event, an IMAP report mailbox, a REST API, and a Model Context Protocol server for AI assistants.
 
 **Privacy** — a submission records *which* fields were filled, not their contents. Storing values is per-page, opt-in, and encrypted; passwords need a second opt-in. `/optout` keeps an address out of future campaigns.
@@ -52,7 +54,7 @@ docker logs trawlarr | grep -A3 admin    # one-time password
 
 Everything that can change at runtime lives in **Settings**: organisation name, tracking URL, report mailbox (host, port, credentials, TLS, folder, sender-domain restriction, delete-after-processing, poll interval), the AI endpoint and the MCP server (enabled, write access, acting account). Changes apply without a restart; secrets are write-only and the UI only reports whether one is stored.
 
-`config.json` holds what needs a restart or is a safety boundary: listen addresses, database path, encryption key and the relay allowlist. Full reference: [docs/configuration.md](docs/configuration.md).
+`config.json` holds what needs a restart or is a safety boundary: listen addresses, database path, encryption key and the relay allowlist. Changing the admin URL offers a restart from the Power menu so the new address and its cookies take effect immediately. Full reference: [docs/configuration.md](docs/configuration.md).
 
 The **Power** menu in the sidebar (admin only) restarts or stops the process. Restart re-executes the binary, so it works under Docker as PID 1 and under systemd, and campaigns that were mid-send resume on start.
 

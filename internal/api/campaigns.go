@@ -47,6 +47,7 @@ type campaignPayload struct {
 	GroupIDs       []int64     `json:"group_ids"`
 	URL            string      `json:"url"`
 	ProxyURL       string      `json:"proxy_url"`
+	CertificateID  int64       `json:"certificate_id"`
 	CaptureCookies bool        `json:"capture_cookies"`
 	LaunchAt       *store.Time `json:"launch_at"`
 	SendBy         *store.Time `json:"send_by"`
@@ -104,6 +105,7 @@ func (s *Server) saveCampaign(w http.ResponseWriter, r *http.Request, id int64) 
 		GroupIDs:       req.GroupIDs,
 		URL:            strings.TrimSuffix(req.URL, "/"),
 		ProxyURL:       strings.TrimSuffix(strings.TrimSpace(req.ProxyURL), "/"),
+		CertificateID:  req.CertificateID,
 		CaptureCookies: req.CaptureCookies,
 		SendRate:       req.SendRate,
 		Jitter:         req.Jitter,
@@ -122,6 +124,10 @@ func (s *Server) saveCampaign(w http.ResponseWriter, r *http.Request, id int64) 
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+	}
+	if err := s.validateCampaignCertificate(me.OrgID, c); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 	if c.SendRate < 0 || c.Jitter < 0 {
 		writeError(w, http.StatusBadRequest, "rate and jitter cannot be negative")
@@ -335,6 +341,31 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		},
 		"recent": recent,
 	})
+}
+
+// validateCampaignCertificate checks the chosen profile exists and covers the
+// hostname the campaign's tracking links will use.
+func (s *Server) validateCampaignCertificate(orgID int64, c *store.Campaign) error {
+	if c.CertificateID == 0 {
+		return nil
+	}
+	profile, err := s.Store.Certificate(orgID, c.CertificateID)
+	if err != nil {
+		return errors.New("certificate profile not found")
+	}
+	host := certificateHost(c.URL)
+	if host == "" {
+		host = certificateHost(s.phishBaseURL())
+	}
+	if host == "" {
+		return nil // plain-HTTP deployments have no hostname to match
+	}
+	for _, d := range profile.Domains {
+		if strings.EqualFold(d, host) {
+			return nil
+		}
+	}
+	return fmt.Errorf("certificate %q does not cover %s", profile.Name, host)
 }
 
 // validateProxyURL enforces the opt-in and the allowlist.

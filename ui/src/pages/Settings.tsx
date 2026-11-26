@@ -35,6 +35,7 @@ type SettingsData = {
   org_name: string
   phish_url: string
   admin_url: string
+  version_hint?: string
   version: string
   events: string[]
   imap: ImapSettings
@@ -113,24 +114,52 @@ export function Settings({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
 function Application({ data, onSaved }: { data: SettingsData; onSaved: () => void }) {
   const [orgName, setOrgName] = useState(data.org_name)
   const [phishURL, setPhishURL] = useState(data.phish_url)
+  const [adminURL, setAdminURL] = useState(data.admin_url)
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [restart, setRestart] = useState<string[]>([])
+  const [restarting, setRestarting] = useState(false)
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
     setBusy(true)
     setError('')
     setNote('')
+    setRestart([])
     try {
-      await api.put('/api/v1/settings', { org_name: orgName, phish_public_url: phishURL })
+      const res = await api.put<{ restart_required?: boolean; restart_reasons?: string[] }>('/api/v1/settings', {
+        org_name: orgName,
+        phish_public_url: phishURL,
+        admin_public_url: adminURL,
+      })
       setNote('Saved.')
+      if (res?.restart_required) setRestart(res.restart_reasons ?? [])
       onSaved()
     } catch (err) {
       setError(errorText(err))
     } finally {
       setBusy(false)
     }
+  }
+
+  async function restartNow() {
+    if (!window.confirm('Restart the server now? The UI reconnects automatically.')) return
+    setRestarting(true)
+    try {
+      await api.post('/api/v1/power/restart')
+    } catch {
+      // the connection usually drops before the response is read
+    }
+    const timer = window.setInterval(async () => {
+      try {
+        await api.get('/api/v1/health')
+        window.clearInterval(timer)
+        window.location.href = adminURL || window.location.origin
+      } catch {
+        // still starting
+      }
+    }, 1500)
   }
 
   return (
@@ -140,6 +169,12 @@ function Application({ data, onSaved }: { data: SettingsData; onSaved: () => voi
       <form onSubmit={save} style={{ maxWidth: 520 }}>
         <Field label="Organisation name">
           <input value={orgName} onChange={(e) => setOrgName(e.target.value)} required />
+        </Field>
+        <Field
+          label="Admin URL"
+          hint="Where you reach this console. Used for cross-origin checks and shown in the sidebar."
+        >
+          <input value={adminURL} onChange={(e) => setAdminURL(e.target.value)} placeholder="https://trawlarr.example.com" />
         </Field>
         <Field
           label="Tracking link base URL"
@@ -153,14 +188,26 @@ function Application({ data, onSaved }: { data: SettingsData; onSaved: () => voi
         {note && <span className="hint" style={{ marginLeft: 10 }}>{note}</span>}
       </form>
 
+      {restart.length > 0 && (
+        <div className="card" style={{ background: 'var(--panel-2)', marginTop: 14 }}>
+          <strong>Restart needed</strong>
+          <p className="muted" style={{ margin: '6px 0 10px' }}>
+            {restart.join(' and ')} changed. Restart from the <strong>Power</strong> menu, or with the button below, to
+            apply it. Sessions are kept and campaigns that were sending resume.
+          </p>
+          <div className="row" style={{ alignItems: 'center' }}>
+            <button className="primary" onClick={restartNow} disabled={restarting}>
+              {restarting ? 'Restarting…' : 'Restart now'}
+            </button>
+            <span className="hint">The Power menu in the sidebar does the same thing.</span>
+          </div>
+        </div>
+      )}
+
       <div style={{ marginTop: 20, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
         <h3>Read-only</h3>
         <table>
           <tbody>
-            <tr>
-              <td className="muted">Admin URL</td>
-              <td className="mono">{data.admin_url}</td>
-            </tr>
             <tr>
               <td className="muted">Version</td>
               <td className="mono">{data.version}</td>
@@ -511,6 +558,7 @@ function MCP({ data, onSaved }: { data: SettingsData; onSaved: () => void }) {
         </button>
         {note && <span className="hint" style={{ marginLeft: 10 }}>{note}</span>}
       </form>
+
     </div>
   )
 }

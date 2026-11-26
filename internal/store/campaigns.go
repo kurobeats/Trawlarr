@@ -56,6 +56,7 @@ type Campaign struct {
 	// ProxyURL switches the campaign to relay mode: the landing page is fetched
 	// live from this origin and session cookies are captured.
 	ProxyURL       string `json:"proxy_url"`
+	CertificateID  int64  `json:"certificate_id"`
 	CaptureCookies bool   `json:"capture_cookies"`
 	Status         string `json:"status"`
 	LaunchAt       Time   `json:"launch_at"`
@@ -126,8 +127,8 @@ type Event struct {
 }
 
 const campaignCols = `id, org_id, name, template_id, page_id, profile_id, group_ids, url, proxy_url,
-	capture_cookies, status, launch_at, send_by, send_rate, jitter_seconds, resend_failed, created_by,
-	created_at, updated_at, started_at, completed_at`
+	certificate_id, capture_cookies, status, launch_at, send_by, send_rate, jitter_seconds, resend_failed,
+	created_by, created_at, updated_at, started_at, completed_at`
 
 func scanCampaign(row interface{ Scan(...any) error }) (*Campaign, error) {
 	var c struct {
@@ -136,7 +137,7 @@ func scanCampaign(row interface{ Scan(...any) error }) (*Campaign, error) {
 	}
 	var launchAt, sendBy, createdAt, updatedAt, startedAt, completedAt int64
 	err := row.Scan(&c.ID, &c.OrgID, &c.Name, &c.TemplateID, &c.PageID, &c.ProfileID, &c.groupIDs, &c.URL,
-		&c.ProxyURL, &c.CaptureCookies, &c.Status, &launchAt, &sendBy, &c.SendRate, &c.Jitter, &c.ResendFailed, &c.CreatedBy,
+		&c.ProxyURL, &c.CertificateID, &c.CaptureCookies, &c.Status, &launchAt, &sendBy, &c.SendRate, &c.Jitter, &c.ResendFailed, &c.CreatedBy,
 		&createdAt, &updatedAt, &startedAt, &completedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
@@ -304,11 +305,11 @@ func (s *Store) CampaignTargets(campaignID int64) ([]CampaignTarget, error) {
 func (s *Store) SaveCampaign(c *Campaign, id int64) error {
 	if id == 0 {
 		res, err := s.db.Exec(`INSERT INTO campaigns (org_id, name, template_id, page_id, profile_id, group_ids, url,
-			proxy_url, capture_cookies, status, launch_at, send_by, send_rate, jitter_seconds, resend_failed,
-			created_by, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			proxy_url, certificate_id, capture_cookies, status, launch_at, send_by, send_rate, jitter_seconds,
+			resend_failed, created_by, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			c.OrgID, c.Name, c.TemplateID, c.PageID, c.ProfileID, jsonInts(c.GroupIDs), c.URL, c.ProxyURL,
-			c.CaptureCookies, c.Status,
+			c.CertificateID, c.CaptureCookies, c.Status,
 			c.LaunchAt.Time().Unix(), c.SendBy.Time().Unix(), c.SendRate, c.Jitter, c.ResendFailed, c.CreatedBy, now(), now())
 		if err != nil {
 			return err
@@ -317,9 +318,10 @@ func (s *Store) SaveCampaign(c *Campaign, id int64) error {
 		return nil
 	}
 	res, err := s.db.Exec(`UPDATE campaigns SET name = ?, template_id = ?, page_id = ?, profile_id = ?, group_ids = ?,
-		url = ?, proxy_url = ?, capture_cookies = ?, status = ?, launch_at = ?, send_by = ?, send_rate = ?,
-		jitter_seconds = ?, resend_failed = ?, updated_at = ? WHERE id = ? AND org_id = ?`,
-		c.Name, c.TemplateID, c.PageID, c.ProfileID, jsonInts(c.GroupIDs), c.URL, c.ProxyURL, c.CaptureCookies, c.Status,
+		url = ?, proxy_url = ?, certificate_id = ?, capture_cookies = ?, status = ?, launch_at = ?, send_by = ?,
+		send_rate = ?, jitter_seconds = ?, resend_failed = ?, updated_at = ? WHERE id = ? AND org_id = ?`,
+		c.Name, c.TemplateID, c.PageID, c.ProfileID, jsonInts(c.GroupIDs), c.URL, c.ProxyURL, c.CertificateID,
+		c.CaptureCookies, c.Status,
 		c.LaunchAt.Time().Unix(), c.SendBy.Time().Unix(), c.SendRate, c.Jitter, c.ResendFailed, now(), id, c.OrgID)
 	if err != nil {
 		return err

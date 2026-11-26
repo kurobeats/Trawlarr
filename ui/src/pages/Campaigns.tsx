@@ -144,6 +144,7 @@ function CampaignForm({ onClose, onSaved }: { onClose: () => void; onSaved: (c: 
   const pages = useAsync(() => api.get<Ref[]>('/api/v1/pages'))
   const profiles = useAsync(() => api.get<Ref[]>('/api/v1/profiles'))
   const groups = useAsync(() => api.get<Group[]>('/api/v1/groups'))
+  const certs = useAsync(() => api.get<{ id: number; name: string; domains: string[] }[]>('/api/v1/certificates'))
 
   const [name, setName] = useState('')
   const [templateId, setTemplateId] = useState(0)
@@ -154,6 +155,7 @@ function CampaignForm({ onClose, onSaved }: { onClose: () => void; onSaved: (c: 
   const [relay, setRelay] = useState(false)
   const [proxyUrl, setProxyUrl] = useState('')
   const [captureCookies, setCaptureCookies] = useState(false)
+  const [certId, setCertId] = useState(0)
   const [launchAt, setLaunchAt] = useState('')
   const [sendBy, setSendBy] = useState('')
   const [rate, setRate] = useState(0)
@@ -177,6 +179,7 @@ function CampaignForm({ onClose, onSaved }: { onClose: () => void; onSaved: (c: 
         url,
         proxy_url: relay ? proxyUrl : '',
         capture_cookies: relay && captureCookies,
+        certificate_id: certId,
         launch_at: launchAt ? new Date(launchAt).toISOString() : null,
         send_by: sendBy ? new Date(sendBy).toISOString() : null,
         send_rate: rate,

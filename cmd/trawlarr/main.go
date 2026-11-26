@@ -25,6 +25,7 @@ import (
 	"github.com/kurobeats/trawlarr/internal/notify"
 	"github.com/kurobeats/trawlarr/internal/secret"
 	"github.com/kurobeats/trawlarr/internal/store"
+	"github.com/kurobeats/trawlarr/internal/tlsutil"
 	"github.com/kurobeats/trawlarr/internal/web"
 )
 
@@ -124,9 +125,37 @@ func run() error {
 	}
 	go monitor.Run(ctx, st)
 
+	// Certificates are requested from the Certificates page, never automatically.
+	// The listener serves whatever is cached, choosing by SNI.
+	profiles := func() []tlsutil.Profile {
+		stored, err := st.AllCertificates()
+		if err != nil {
+			log.Warn("certificate lookup failed", "err", err)
+			return nil
+		}
+		out := make([]tlsutil.Profile, 0, len(stored))
+		for _, c := range stored {
+			out = append(out, tlsutil.FromCertificate(c))
+		}
+		return out
+	}
+	var acmeTLS *tls.Config
+	challengeAddr := ""
+	if all := profiles(); len(all) > 0 {
+		acmeTLS = tlsutil.ServerConfig(profiles)
+		challengeAddr = ":80"
+		for _, p := range all {
+			if addr := tlsutil.ChallengeAddr(p); addr != "" {
+				challengeAddr = addr
+				break
+			}
+		}
+		log.Info("certificate profiles available", "count", len(all), "challenge", challengeAddr)
+	}
+
 	errs := make(chan error, 2)
 	servers := []*http.Server{}
-	start := func(name string, s config.Server, handler http.Handler) error {
+	start := func(name string, s config.Server, handler http.Handler, tlsConfig *tls.Config) error {
 		if s.Addr() == "" {
 			return nil
 		}
@@ -141,12 +170,16 @@ func run() error {
 		}
 		servers = append(servers, httpSrv)
 		go func() {
-			log.Info("listening", "server", name, "addr", s.Addr(), "tls", s.UseTLS)
+			log.Info("listening", "server", name, "addr", s.Addr(), "tls", s.UseTLS || tlsConfig != nil)
 			var err error
-			if s.UseTLS {
+			switch {
+			case tlsConfig != nil:
+				httpSrv.TLSConfig = tlsConfig
+				err = httpSrv.ListenAndServeTLS("", "")
+			case s.UseTLS:
 				httpSrv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 				err = httpSrv.ListenAndServeTLS(s.CertPath, s.KeyPath)
-			} else {
+			default:
 				err = httpSrv.ListenAndServe()
 			}
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -157,16 +190,32 @@ func run() error {
 	}
 
 	if cfg.SameListener() {
-		if err := start("admin+phish", cfg.AdminServer, srv.CombinedHandler()); err != nil {
+		if err := start("admin+phish", cfg.AdminServer, srv.CombinedHandler(), acmeTLS); err != nil {
 			return err
 		}
 	} else {
-		if err := start("admin", cfg.AdminServer, srv.AdminHandler()); err != nil {
+		if err := start("admin", cfg.AdminServer, srv.AdminHandler(), nil); err != nil {
 			return err
 		}
-		if err := start("phish", cfg.PhishServer, srv.PhishHandler()); err != nil {
+		if err := start("phish", cfg.PhishServer, srv.PhishHandler(), acmeTLS); err != nil {
 			return err
 		}
+	}
+
+	// HTTP-01 challenges need plain :80; other paths redirect to HTTPS.
+	if challengeAddr != "" {
+		challenge := &http.Server{
+			Addr:              challengeAddr,
+			Handler:           tlsutil.ChallengeHandler(profiles),
+			ReadHeaderTimeout: 10 * time.Second,
+		}
+		servers = append(servers, challenge)
+		go func() {
+			log.Info("listening", "server", "acme-challenge", "addr", challenge.Addr)
+			if err := challenge.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errs <- fmt.Errorf("acme challenge server: %w", err)
+			}
+		}()
 	}
 
 	select {

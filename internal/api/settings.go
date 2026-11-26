@@ -54,7 +54,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	org, _ := s.Store.Org(me.OrgID)
 	out := map[string]any{
 		"phish_url": s.phishBaseURL(),
-		"admin_url": s.Cfg.AdminServer.BaseURL(),
+		"admin_url": s.adminBaseURL(),
 		"events":    store.AllEvents,
 		"version":   Version,
 		"imap":      s.imapSettings(),
@@ -73,6 +73,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		OrgName        *string       `json:"org_name"`
 		PhishPublicURL *string       `json:"phish_public_url"`
+		AdminPublicURL *string       `json:"admin_public_url"`
 		IMAP           *imapSettings `json:"imap"`
 		AI             *aiSettings   `json:"ai"`
 		MCP            *mcpSettings  `json:"mcp"`
@@ -82,6 +83,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	changed := []string{}
+	restartReasons := []string{}
 	if req.OrgName != nil {
 		name := strings.TrimSpace(*req.OrgName)
 		if name == "" {
@@ -93,6 +95,24 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		changed = append(changed, "org_name")
+	}
+	if req.AdminPublicURL != nil {
+		raw := strings.TrimSpace(*req.AdminPublicURL)
+		if raw != "" {
+			u, err := url.Parse(raw)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				writeError(w, http.StatusBadRequest, "admin URL must be http(s)")
+				return
+			}
+		}
+		if err := s.Store.SetSetting("admin_public_url", strings.TrimSuffix(raw, "/")); err != nil {
+			writeStoreError(w, err)
+			return
+		}
+		changed = append(changed, "admin_public_url")
+		// Cookies are scoped to the host, so a changed admin address means
+		// signing in again; a restart makes the switch unambiguous.
+		restartReasons = append(restartReasons, "admin URL")
 	}
 	if req.PhishPublicURL != nil {
 		raw := strings.TrimSpace(*req.PhishPublicURL)
@@ -133,7 +153,11 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.Store.Audit(me.OrgID, me.ID, "settings.updated", strings.Join(changed, ","), "", s.clientIP(r))
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":               true,
+		"restart_required": len(restartReasons) > 0,
+		"restart_reasons":  restartReasons,
+	})
 }
 
 // ------------------------------------------------------------------- IMAP
@@ -404,6 +428,15 @@ func (s *Server) reloadAI() {
 		return
 	}
 	s.AI = ai.New(s.effectiveAIConfig())
+}
+
+// adminBaseURL is the address operators reach the admin UI on, when it differs
+// from what the server sees (reverse proxies, port forwards).
+func (s *Server) adminBaseURL() string {
+	if v, _ := s.Store.Setting("admin_public_url"); v != "" {
+		return v
+	}
+	return s.Cfg.AdminServer.BaseURL()
 }
 
 // phishBaseURL is the origin used in tracking links: the UI override wins over
