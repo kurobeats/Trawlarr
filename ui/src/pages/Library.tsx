@@ -75,6 +75,7 @@ export function Templates() {
   const crud = useCrud<Template>('/api/v1/templates')
   const attachments = useAsync(() => api.get<Attachment[]>('/api/v1/attachments'))
   const [editing, setEditing] = useState<Template | null>(null)
+  const [preview, setPreview] = useState<Template | null>(null)
   const blank: Template = { id: 0, name: '', subject: '', text_body: '', html_body: '', attachments: [] }
 
   return (
@@ -100,6 +101,7 @@ export function Templates() {
               <td className="muted">{t.subject}</td>
               <td className="muted">{t.attachments?.length ?? 0}</td>
               <td className="actions">
+                <button onClick={() => setPreview(t)}>Preview</button>{' '}
                 <button onClick={() => setEditing(t)}>Edit</button>{' '}
                 <button className="danger" onClick={() => crud.remove(t.id, t.name)}>
                   Delete
@@ -130,7 +132,93 @@ export function Templates() {
           }}
         />
       )}
+      {preview && <TemplatePreview template={preview} onClose={() => setPreview(null)} />}
     </ListShell>
+  )
+}
+
+type RenderedEmail = {
+  subject: string
+  text_body: string
+  html_body: string
+  attachments: string[]
+}
+
+// TemplatePreview shows the email the way a recipient would see it, with
+// sample values substituted and every tracking URL made inert.
+function TemplatePreview({ template, onClose }: { template: Template; onClose: () => void }) {
+  const [mode, setMode] = useState<'html' | 'text'>('html')
+  const { data, error, loading } = useAsync(
+    () => api.get<RenderedEmail>(`/api/v1/templates/${template.id}/preview`),
+    [template.id],
+  )
+  const hasHTML = Boolean(data?.html_body)
+  const view = !hasHTML ? 'text' : mode
+
+  return (
+    <Modal title={`Preview: ${template.name}`} onClose={onClose} wide>
+      <ErrorBox message={error} />
+      {loading && <Loading what="Rendering" />}
+      {data && (
+        <>
+          <div className="card" style={{ background: 'var(--panel-2)', marginBottom: 12 }}>
+            <div className="muted small">Subject</div>
+            <div style={{ fontWeight: 600 }}>{data.subject || '(no subject)'}</div>
+            {data.attachments.length > 0 && (
+              <div className="muted small" style={{ marginTop: 6 }}>
+                Attachments: {data.attachments.join(', ')}
+              </div>
+            )}
+          </div>
+
+          {hasHTML && (
+            <div className="row" style={{ marginBottom: 8 }}>
+              <button className={view === 'html' ? 'primary' : ''} onClick={() => setMode('html')}>
+                HTML
+              </button>
+              <button className={view === 'text' ? 'primary' : ''} onClick={() => setMode('text')}>
+                Plain text
+              </button>
+            </div>
+          )}
+
+          {view === 'html' ? (
+            <iframe
+              title={`Preview of ${template.name}`}
+              srcDoc={data.html_body}
+              // No scripts, no forms, no same-origin access.
+              sandbox=""
+              style={{
+                width: '100%',
+                height: '55vh',
+                border: '1px solid var(--line)',
+                borderRadius: 8,
+                background: '#fff',
+              }}
+            />
+          ) : (
+            <pre
+              className="prewrap"
+              style={{
+                background: 'var(--panel-2)',
+                padding: 12,
+                borderRadius: 8,
+                margin: 0,
+                maxHeight: '55vh',
+                overflow: 'auto',
+              }}
+            >
+              {data.text_body || '(no plain-text body)'}
+            </pre>
+          )}
+
+          <p className="hint" style={{ marginBottom: 0 }}>
+            Sample values. Links point nowhere and the tracking pixel is inline, so opening a preview makes no
+            requests to the phishing listener.
+          </p>
+        </>
+      )}
+    </Modal>
   )
 }
 

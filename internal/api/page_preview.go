@@ -1,8 +1,10 @@
 package api
 
 import (
+	"encoding/base64"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/kurobeats/trawlarr/internal/tmpl"
 )
@@ -13,6 +15,37 @@ import (
 const previewCSP = "sandbox; default-src 'none'; img-src * data: blob:; " +
 	"media-src *; style-src 'unsafe-inline' *; font-src * data:; " +
 	"form-action 'none'; frame-ancestors 'self'"
+
+// previewRecipient is the sample person both previews render against.
+func previewRecipient() tmpl.Recipient {
+	return tmpl.Recipient{
+		FirstName: "Alex", LastName: "Morgan", Email: "alex.morgan@example.com",
+		Position: "Finance", Custom: map[string]string{},
+	}
+}
+
+// previewContext builds the template context used by the previews.
+func (s *Server) previewContext() (tmpl.Context, error) {
+	return tmpl.NewContext("Security Team <security@example.com>", s.phishBaseURL(), "preview", previewRecipient())
+}
+
+// previewPixel is an inline 1x1 GIF, so previews never call the tracking
+// endpoint and never show a broken image.
+var previewPixel = `<img alt="" src="data:image/gif;base64,` +
+	base64.StdEncoding.EncodeToString(pixel) + `" style="display:none">`
+
+// neutralise strips live tracking URLs from rendered preview markup: a click
+// must not navigate the preview frame into a 404.
+func neutralise(html string, ctx tmpl.Context) string {
+	html = strings.ReplaceAll(html, ctx.Tracker, previewPixel)
+	html = strings.ReplaceAll(html, ctx.TrackingURL, "#")
+	for _, u := range []string{ctx.URL, ctx.OptOutURL, ctx.ReportURL} {
+		if u != "" {
+			html = strings.ReplaceAll(html, u, "#")
+		}
+	}
+	return html
+}
 
 // handlePreviewPage renders a landing page with sample values for the preview
 // iframe. Nothing is stored and no tracking request is made.
@@ -28,11 +61,7 @@ func (s *Server) handlePreviewPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, err := tmpl.NewContext("Security Team <security@example.com>", s.phishBaseURL(), "preview",
-		tmpl.Recipient{
-			FirstName: "Alex", LastName: "Morgan", Email: "alex.morgan@example.com",
-			Position: "Finance", Custom: map[string]string{},
-		})
+	ctx, err := s.previewContext()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not build the preview context")
 		return
@@ -53,7 +82,7 @@ func (s *Server) handlePreviewPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", previewCSP)
 	// The preview is meant to be framed by the admin UI.
 	w.Header().Del("X-Frame-Options")
-	io.WriteString(w, rendered)
+	io.WriteString(w, neutralise(rendered, ctx))
 }
 
 // escapeHTML keeps a template error from injecting markup into the frame.
