@@ -44,9 +44,9 @@ func RenderAttachment(name string, content []byte, render func(string) (string, 
 		}
 		return []byte(out), nil
 	case archiveExtensions[ext]:
-		if !bytes.Contains(content, []byte("{{")) && !bytes.Contains(content, []byte("%7b%7b")) {
-			return content, nil
-		}
+		// Never sniff the archive bytes for placeholders: the parts are
+		// compressed, so a match would be luck. Rebuild and let renderArchive
+		// decide per part.
 		return renderArchive(content, render)
 	default:
 		return content, nil

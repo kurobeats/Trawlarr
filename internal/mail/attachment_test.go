@@ -145,3 +145,38 @@ func readZip(t *testing.T, raw []byte) map[string]string {
 	}
 	return out
 }
+
+// A placeholder-free archive must survive unchanged, and the decision must not
+// depend on what the compressed bytes happen to look like.
+func TestArchiveWithoutPlaceholdersIsUntouched(t *testing.T) {
+	for i := 0; i < 20; i++ {
+		doc := buildZip(t, map[string]string{
+			"word/document.xml": `<w:t>plain text, nothing to render</w:t>`,
+			"word/media/a.bin":  strings.Repeat("\x00\x01", 500),
+		})
+		out, err := RenderAttachment("invoice.docx", doc, renderer(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(doc, out) {
+			t.Fatalf("iteration %d: placeholder-free archive was rewritten", i)
+		}
+	}
+}
+
+// Regression: the old code sniffed "{{" in the compressed container, so
+// rendering depended on deflate output and silently skipped documents.
+func TestArchiveRenderingIsDeterministic(t *testing.T) {
+	doc := buildZip(t, map[string]string{
+		"word/document.xml": `<w:t>{{.FirstName}}</w:t>`,
+	})
+	for i := 0; i < 20; i++ {
+		out, err := RenderAttachment("invoice.docx", doc, renderer(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if entries := readZip(t, out); !strings.Contains(entries["word/document.xml"], "Alice") {
+			t.Fatalf("iteration %d: not rendered: %q", i, entries["word/document.xml"])
+		}
+	}
+}
