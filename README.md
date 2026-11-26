@@ -1,8 +1,12 @@
-# Trawlarr
+<p align="center">
+  <img src="assets/trawlarr.png" alt="Trawlarr" width="200">
+</p>
 
-Open-source phishing simulation platform. One binary with the UI embedded, SQLite storage, and an importer for existing databases.
+<h1 align="center">Trawlarr</h1>
 
-Groups, templates, landing pages, sending profiles and campaigns, with per-recipient tracking of opens, clicks, submissions and reports. Written from scratch, so the internals are explicit SQL, typed events and a modern interface.
+<p align="center">Open-source phishing simulation platform.</p>
+
+One binary with the UI embedded, SQLite storage, and an importer for existing databases. Groups, templates, landing pages, sending profiles and campaigns, with per-recipient tracking of opens, clicks, submissions and reports. Written from scratch, so the internals are explicit SQL, typed events and a modern interface.
 
 Use it for authorised security-awareness training and red-team work. **You are responsible for having permission for every domain, mailbox and recipient you target.**
 
