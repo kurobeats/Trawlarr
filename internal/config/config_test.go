@@ -151,3 +151,29 @@ func TestNormalizeDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMCPFromSettings(t *testing.T) {
+	cfg := Default()
+	cfg.MCP = MCP{Enabled: true, AllowWrites: false, User: "admin"}
+
+	// No stored settings: the file wins.
+	if got := cfg.MCPFrom(nil); got != cfg.MCP {
+		t.Fatalf("nil reader changed the config: %+v", got)
+	}
+
+	reader := fakeSettings{"mcp_enabled": "false", "mcp_allow_writes": "true", "mcp_user": "analyst"}
+	got := cfg.MCPFrom(reader)
+	if got.Enabled || !got.AllowWrites || got.User != "analyst" {
+		t.Fatalf("stored settings not applied: %+v", got)
+	}
+
+	// Blank values fall back to the file.
+	partial := cfg.MCPFrom(fakeSettings{"mcp_user": ""})
+	if !partial.Enabled || partial.User != "admin" {
+		t.Fatalf("blank setting should fall back: %+v", partial)
+	}
+}
+
+type fakeSettings map[string]string
+
+func (f fakeSettings) Setting(key string) (string, error) { return f[key], nil }

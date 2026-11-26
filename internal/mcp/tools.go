@@ -78,7 +78,10 @@ type createCampaignArgs struct {
 // read-only tools -----------------------------------------------------------
 
 func (s *Server) dashboard(limitArgs) (*mcp_golang.ToolResponse, error) {
-	campaigns, err := s.store.Campaigns(s.actor.OrgID, 200)
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
+	campaigns, err := s.store.Campaigns(s.actorUser().OrgID, 200)
 	if err != nil {
 		return nil, err
 	}
@@ -97,10 +100,10 @@ func (s *Server) dashboard(limitArgs) (*mcp_golang.ToolResponse, error) {
 			active++
 		}
 	}
-	groups, _ := s.store.Groups(s.actor.OrgID)
-	templates, _ := s.store.Templates(s.actor.OrgID)
-	pages, _ := s.store.Pages(s.actor.OrgID)
-	profiles, _ := s.store.Profiles(s.actor.OrgID)
+	groups, _ := s.store.Groups(s.actorUser().OrgID)
+	templates, _ := s.store.Templates(s.actorUser().OrgID)
+	pages, _ := s.store.Pages(s.actorUser().OrgID)
+	profiles, _ := s.store.Profiles(s.actorUser().OrgID)
 	return jsonResponse(map[string]any{
 		"campaigns": len(campaigns),
 		"active":    active,
@@ -121,11 +124,14 @@ type campaignRow struct {
 }
 
 func (s *Server) listCampaigns(args limitArgs) (*mcp_golang.ToolResponse, error) {
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
 	limit := args.Limit
 	if limit <= 0 {
 		limit = 50
 	}
-	campaigns, err := s.store.Campaigns(s.actor.OrgID, limit)
+	campaigns, err := s.store.Campaigns(s.actorUser().OrgID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +143,10 @@ func (s *Server) listCampaigns(args limitArgs) (*mcp_golang.ToolResponse, error)
 }
 
 func (s *Server) getCampaign(args campaignDetailArgs) (*mcp_golang.ToolResponse, error) {
-	c, err := s.store.Campaign(s.actor.OrgID, args.ID)
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
+	c, err := s.store.Campaign(s.actorUser().OrgID, args.ID)
 	if err != nil {
 		return nil, fmt.Errorf("campaign %d: %w", args.ID, err)
 	}
@@ -190,7 +199,10 @@ func (s *Server) getCampaign(args campaignDetailArgs) (*mcp_golang.ToolResponse,
 }
 
 func (s *Server) exportCampaign(args idArgs) (*mcp_golang.ToolResponse, error) {
-	c, err := s.store.Campaign(s.actor.OrgID, args.ID)
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
+	c, err := s.store.Campaign(s.actorUser().OrgID, args.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -220,10 +232,13 @@ func csvTime(t store.Time) string {
 }
 
 func (s *Server) analyzeCampaign(args idArgs) (*mcp_golang.ToolResponse, error) {
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
 	if s.ai == nil {
 		return nil, errors.New("AI analysis is disabled; set ai.enabled, ai.base_url and ai.model in config.json")
 	}
-	c, err := s.store.Campaign(s.actor.OrgID, args.ID)
+	c, err := s.store.Campaign(s.actorUser().OrgID, args.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +271,10 @@ func durationOf(start, end store.Time) string {
 }
 
 func (s *Server) listGroups(args listGroupsArgs) (*mcp_golang.ToolResponse, error) {
-	groups, err := s.store.Groups(s.actor.OrgID)
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
+	groups, err := s.store.Groups(s.actorUser().OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +296,10 @@ func (s *Server) listGroups(args listGroupsArgs) (*mcp_golang.ToolResponse, erro
 }
 
 func (s *Server) listTemplates(limitArgs) (*mcp_golang.ToolResponse, error) {
-	templates, err := s.store.Templates(s.actor.OrgID)
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
+	templates, err := s.store.Templates(s.actorUser().OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +316,10 @@ func (s *Server) listTemplates(limitArgs) (*mcp_golang.ToolResponse, error) {
 }
 
 func (s *Server) getTemplate(args idArgs) (*mcp_golang.ToolResponse, error) {
-	t, err := s.store.Template(s.actor.OrgID, args.ID)
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
+	t, err := s.store.Template(s.actorUser().OrgID, args.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +331,10 @@ func (s *Server) getTemplate(args idArgs) (*mcp_golang.ToolResponse, error) {
 }
 
 func (s *Server) listPages(limitArgs) (*mcp_golang.ToolResponse, error) {
-	pages, err := s.store.Pages(s.actor.OrgID)
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
+	pages, err := s.store.Pages(s.actorUser().OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -328,7 +355,10 @@ func (s *Server) listPages(limitArgs) (*mcp_golang.ToolResponse, error) {
 }
 
 func (s *Server) listProfiles(limitArgs) (*mcp_golang.ToolResponse, error) {
-	profiles, err := s.store.Profiles(s.actor.OrgID)
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
+	profiles, err := s.store.Profiles(s.actorUser().OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -350,6 +380,9 @@ func (s *Server) listProfiles(limitArgs) (*mcp_golang.ToolResponse, error) {
 }
 
 func (s *Server) draftEmail(args draftArgs) (*mcp_golang.ToolResponse, error) {
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
 	if s.ai == nil {
 		return nil, errors.New("AI drafting is disabled; set ai.enabled, ai.base_url and ai.model in config.json")
 	}
@@ -364,6 +397,9 @@ func (s *Server) draftEmail(args draftArgs) (*mcp_golang.ToolResponse, error) {
 }
 
 func (s *Server) draftLandingPage(args draftArgs) (*mcp_golang.ToolResponse, error) {
+	if err := s.guard(); err != nil {
+		return nil, err
+	}
 	if s.ai == nil {
 		return nil, errors.New("AI drafting is disabled; set ai.enabled, ai.base_url and ai.model in config.json")
 	}
@@ -391,7 +427,7 @@ func (s *Server) createGroup(args createGroupArgs) (*mcp_golang.ToolResponse, er
 	if err != nil {
 		return nil, err
 	}
-	g := &store.Group{OrgID: s.actor.OrgID, Name: name, Targets: targets}
+	g := &store.Group{OrgID: s.actorUser().OrgID, Name: name, Targets: targets}
 	if err := s.store.SaveGroup(g, 0); err != nil {
 		return nil, err
 	}
@@ -409,7 +445,7 @@ func (s *Server) createTemplate(args createTemplateArgs) (*mcp_golang.ToolRespon
 	if args.HTMLBody == "" && args.TextBody == "" {
 		return nil, errors.New("a template needs a text or html body")
 	}
-	t := &store.Template{OrgID: s.actor.OrgID, Name: args.Name, Subject: args.Subject,
+	t := &store.Template{OrgID: s.actorUser().OrgID, Name: args.Name, Subject: args.Subject,
 		TextBody: args.TextBody, HTMLBody: args.HTMLBody}
 	if err := s.store.SaveTemplate(t, 0); err != nil {
 		return nil, err
@@ -426,7 +462,7 @@ func (s *Server) createLandingPage(args createPageArgs) (*mcp_golang.ToolRespons
 		return nil, errors.New("name and html are required")
 	}
 	// Recording values is a privacy decision, not a default.
-	p := &store.Page{OrgID: s.actor.OrgID, Name: args.Name, HTML: args.HTML,
+	p := &store.Page{OrgID: s.actorUser().OrgID, Name: args.Name, HTML: args.HTML,
 		Capture: args.Capture || args.CaptureValues, CaptureValues: args.CaptureValues,
 		CapturePasswords: args.CapturePasswords, RedirectURL: args.RedirectURL}
 	if err := s.store.SavePage(p, 0); err != nil {
@@ -447,24 +483,24 @@ func (s *Server) createCampaign(args createCampaignArgs) (*mcp_golang.ToolRespon
 		return nil, errors.New("at least one group is required")
 	}
 	// Validate references up front so a draft is never half-broken.
-	if _, err := s.store.Template(s.actor.OrgID, args.TemplateID); err != nil {
+	if _, err := s.store.Template(s.actorUser().OrgID, args.TemplateID); err != nil {
 		return nil, fmt.Errorf("template %d: %w", args.TemplateID, err)
 	}
-	if _, err := s.store.Page(s.actor.OrgID, args.PageID); err != nil {
+	if _, err := s.store.Page(s.actorUser().OrgID, args.PageID); err != nil {
 		return nil, fmt.Errorf("landing page %d: %w", args.PageID, err)
 	}
-	if _, err := s.store.Profile(s.actor.OrgID, args.ProfileID); err != nil {
+	if _, err := s.store.Profile(s.actorUser().OrgID, args.ProfileID); err != nil {
 		return nil, fmt.Errorf("sending profile %d: %w", args.ProfileID, err)
 	}
 	for _, gid := range args.GroupIDs {
-		if _, err := s.store.Group(s.actor.OrgID, gid); err != nil {
+		if _, err := s.store.Group(s.actorUser().OrgID, gid); err != nil {
 			return nil, fmt.Errorf("group %d: %w", gid, err)
 		}
 	}
-	c := &store.Campaign{OrgID: s.actor.OrgID, Name: args.Name, TemplateID: args.TemplateID,
+	c := &store.Campaign{OrgID: s.actorUser().OrgID, Name: args.Name, TemplateID: args.TemplateID,
 		PageID: args.PageID, ProfileID: args.ProfileID, GroupIDs: args.GroupIDs,
 		URL: strings.TrimSuffix(args.URL, "/"), SendRate: args.SendRate, Jitter: args.JitterSeconds,
-		Status: store.StatusDraft, CreatedBy: s.actor.ID}
+		Status: store.StatusDraft, CreatedBy: s.actorUser().ID}
 	if args.LaunchAt != "" {
 		when, err := time.Parse(time.RFC3339, args.LaunchAt)
 		if err != nil {
@@ -483,7 +519,7 @@ func (s *Server) launchCampaign(args idArgs) (*mcp_golang.ToolResponse, error) {
 	if err := s.requireWrite("launch_campaign"); err != nil {
 		return nil, err
 	}
-	c, err := s.store.Campaign(s.actor.OrgID, args.ID)
+	c, err := s.store.Campaign(s.actorUser().OrgID, args.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -492,13 +528,13 @@ func (s *Server) launchCampaign(args idArgs) (*mcp_golang.ToolResponse, error) {
 	}
 	// Validate before queuing so the sending server never picks up a broken
 	// campaign.
-	if _, err := s.store.Template(s.actor.OrgID, c.TemplateID); err != nil {
+	if _, err := s.store.Template(s.actorUser().OrgID, c.TemplateID); err != nil {
 		return nil, fmt.Errorf("template %d: %w", c.TemplateID, err)
 	}
-	if _, err := s.store.Page(s.actor.OrgID, c.PageID); err != nil {
+	if _, err := s.store.Page(s.actorUser().OrgID, c.PageID); err != nil {
 		return nil, fmt.Errorf("landing page %d: %w", c.PageID, err)
 	}
-	if _, err := s.store.Profile(s.actor.OrgID, c.ProfileID); err != nil {
+	if _, err := s.store.Profile(s.actorUser().OrgID, c.ProfileID); err != nil {
 		return nil, fmt.Errorf("sending profile %d: %w", c.ProfileID, err)
 	}
 	if len(c.GroupIDs) == 0 {
@@ -529,7 +565,7 @@ func (s *Server) stopCampaign(args idArgs) (*mcp_golang.ToolResponse, error) {
 	if err := s.requireWrite("stop_campaign"); err != nil {
 		return nil, err
 	}
-	c, err := s.store.Campaign(s.actor.OrgID, args.ID)
+	c, err := s.store.Campaign(s.actorUser().OrgID, args.ID)
 	if err != nil {
 		return nil, err
 	}

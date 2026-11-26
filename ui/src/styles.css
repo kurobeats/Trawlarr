@@ -68,6 +68,16 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(79,163,255,.
 .nav-item.active { background: var(--panel-2); color: var(--text); font-weight: 600; }
 .spacer { flex: 1; }
 
+.nav-sub { padding: 6px 10px 6px 26px; border-radius: 8px; color: var(--muted); cursor: pointer; font-size: 13px; }
+.nav-sub:hover { background: var(--panel-2); color: var(--text); }
+.nav-sub.danger:hover { color: var(--bad); }
+
+.power-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(4, 8, 14, .82);
+  display: grid; place-items: center; padding: 24px;
+}
+
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {
   display: flex; align-items: center; gap: 12px; padding: 12px 20px;

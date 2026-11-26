@@ -227,6 +227,38 @@ func (c *Config) ProxyHostAllowed(host string) bool {
 	return false
 }
 
+// SettingsReader is the subset of the store needed to resolve settings.
+type SettingsReader interface {
+	Setting(key string) (string, error)
+}
+
+// MCPFrom resolves the MCP settings, preferring the values saved in the UI and
+// falling back to the config file. It is read per tool call, so changes apply
+// without restarting the MCP process.
+func (c *Config) MCPFrom(st SettingsReader) MCP {
+	out := c.MCP
+	if st == nil {
+		return out
+	}
+	read := func(key string) (string, bool) {
+		v, err := st.Setting(key)
+		if err != nil || v == "" {
+			return "", false
+		}
+		return v, true
+	}
+	if v, ok := read("mcp_enabled"); ok {
+		out.Enabled = v == "true" || v == "1"
+	}
+	if v, ok := read("mcp_allow_writes"); ok {
+		out.AllowWrites = v == "true" || v == "1"
+	}
+	if v, ok := read("mcp_user"); ok {
+		out.User = v
+	}
+	return out
+}
+
 // SameListener reports whether admin and phish traffic share an address.
 func (c *Config) SameListener() bool {
 	return c.AdminServer.Addr() == c.PhishServer.Addr()

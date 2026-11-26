@@ -50,9 +50,11 @@ docker logs trawlarr | grep -A3 admin    # one-time password
 
 ## Settings
 
-Everything that can change at runtime lives in **Settings**: organisation name, tracking URL, report mailbox (host, port, credentials, TLS, folder, sender-domain restriction, delete-after-processing, poll interval) and the AI endpoint. Changes apply without a restart; secrets are write-only and the UI only reports whether one is stored.
+Everything that can change at runtime lives in **Settings**: organisation name, tracking URL, report mailbox (host, port, credentials, TLS, folder, sender-domain restriction, delete-after-processing, poll interval), the AI endpoint and the MCP server (enabled, write access, acting account). Changes apply without a restart; secrets are write-only and the UI only reports whether one is stored.
 
-`config.json` holds what needs a restart or is a safety boundary: listen addresses, database path, encryption key, relay allowlist and the MCP server. Full reference: [docs/configuration.md](docs/configuration.md).
+`config.json` holds what needs a restart or is a safety boundary: listen addresses, database path, encryption key and the relay allowlist. Full reference: [docs/configuration.md](docs/configuration.md).
+
+The **Power** menu in the sidebar (admin only) restarts or stops the process. Restart re-executes the binary, so it works under Docker as PID 1 and under systemd, and campaigns that were mid-send resume on start.
 
 ## Fingerprints
 
@@ -86,7 +88,7 @@ Reads by column name, so older schemas work. Refuses to write into a non-empty d
 
 `Settings → AI` points at any OpenAI-compatible endpoint (hosted API, Ollama, vLLM, LM Studio, a gateway). It drafts emails and landing pages from a brief and analyses a finished campaign; analysis sends aggregate numbers only. `TRAWLARR_AI_API_KEY` works instead of storing the key.
 
-`trawlarr mcp` is a stdio MCP server with 18 tools for read access, drafting and campaign management. Writes stay off until `mcp.allow_writes` is set, every call is audited, and `launch_campaign` queues the campaign for the running server rather than sending from the MCP process.
+`trawlarr mcp` is a stdio MCP server with 18 tools for read access, drafting and campaign management. Writes stay off until they are enabled in **Settings → MCP**, which also picks the account tool calls act as; every call is audited, and `launch_campaign` queues the campaign for the running server rather than sending from the MCP process.
 
 ## API
 

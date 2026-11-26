@@ -249,3 +249,166 @@ func TestSinglePortMode(t *testing.T) {
 	cmd.Process.Signal(syscall.SIGTERM)
 	_ = cmd.Wait()
 }
+
+// powerLogin returns a session cookie for the seeded admin.
+func powerLogin(t *testing.T, baseURL, password string) *http.Cookie {
+	t.Helper()
+	resp, err := http.Post(baseURL+"/api/v1/login", "application/json",
+		strings.NewReader(`{"username":"admin","password":"`+password+`"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login = %d", resp.StatusCode)
+	}
+	for _, cookie := range resp.Cookies() {
+		if cookie.Name == "trawlarr_session" {
+			return cookie
+		}
+	}
+	t.Fatal("no session cookie")
+	return nil
+}
+
+func powerPost(t *testing.T, baseURL, action string, cookie *http.Cookie) int {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, baseURL+"/api/v1/power/"+action, nil)
+	req.AddCookie(cookie)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	return resp.StatusCode
+}
+
+func TestPowerShutdownStopsTheProcess(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping process-level test in -short mode")
+	}
+	dir := t.TempDir()
+	port := freePort(t)
+	cfgPath := writeConfig(t, dir, port, freePort(t))
+	cmd := exec.Command(binary, "-config", cfgPath)
+	cmd.Env = append(os.Environ(), "TRAWLARR_ADMIN_PASSWORD=power-test-password")
+	cmd.Dir = dir
+	var logs strings.Builder
+	cmd.Stdout, cmd.Stderr = &logs, &logs
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	base := fmt.Sprintf("http://127.0.0.1:%d", port)
+	resp := waitFor(t, base+"/api/v1/health", 20*time.Second)
+	resp.Body.Close()
+
+	cookie := powerLogin(t, base, "power-test-password")
+	if status := powerPost(t, base, "shutdown", cookie); status != http.StatusAccepted {
+		t.Fatalf("shutdown = %d", status)
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("shutdown exit = %v\n%s", err, logs.String())
+		}
+	case <-time.After(20 * time.Second):
+		cmd.Process.Kill()
+		t.Fatal("server did not stop after the shutdown request")
+	}
+}
+
+func TestPowerRestartKeepsServing(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping process-level test in -short mode")
+	}
+	dir := t.TempDir()
+	port := freePort(t)
+	cfgPath := writeConfig(t, dir, port, freePort(t))
+	setLogLevel(t, cfgPath, "info")
+	cmd := exec.Command(binary, "-config", cfgPath)
+	cmd.Env = append(os.Environ(), "TRAWLARR_ADMIN_PASSWORD=power-test-password")
+	cmd.Dir = dir
+	// The logs are read while the process is still running (and after it
+	// re-execs), so they go to a file rather than a strings.Builder.
+	logPath := filepath.Join(dir, "server.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer logFile.Close()
+	cmd.Stdout, cmd.Stderr = logFile, logFile
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { cmd.Process.Kill() }()
+
+	base := fmt.Sprintf("http://127.0.0.1:%d", port)
+	resp := waitFor(t, base+"/api/v1/health", 20*time.Second)
+	resp.Body.Close()
+
+	cookie := powerLogin(t, base, "power-test-password")
+	if status := powerPost(t, base, "restart", cookie); status != http.StatusAccepted {
+		t.Fatalf("restart = %d", status)
+	}
+
+	// The address goes quiet, then answers again from the re-exec'd process.
+	time.Sleep(powerDelay + 200*time.Millisecond)
+	deadline := time.Now().Add(25 * time.Second)
+	recovered := false
+	for time.Now().Before(deadline) {
+		resp, err := http.Get(base + "/api/v1/health")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				recovered = true
+				break
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	written, _ := os.ReadFile(logPath)
+	if !recovered {
+		t.Fatalf("server did not come back after restart\n%s", written)
+	}
+	if !strings.Contains(string(written), "re-executing the server") {
+		t.Fatalf("restart path not taken\n%s", written)
+	}
+	// The restart is a re-exec, so the process id is unchanged and the
+	// session survives in the database.
+	req, _ := http.NewRequest(http.MethodGet, base+"/api/v1/me", nil)
+	req.AddCookie(cookie)
+	meResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer meResp.Body.Close()
+	if meResp.StatusCode != http.StatusOK {
+		t.Fatalf("session lost after restart: %d", meResp.StatusCode)
+	}
+}
+
+const powerDelay = 300 * time.Millisecond
+
+// setLogLevel rewrites log_level in an existing config file.
+func setLogLevel(t *testing.T, path, level string) {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg["log_level"] = level
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}

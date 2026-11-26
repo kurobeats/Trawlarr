@@ -28,10 +28,6 @@ func runMCP(args []string) int {
 		fmt.Fprintln(os.Stderr, "config:", err)
 		return 1
 	}
-	if !cfg.MCP.Enabled {
-		fmt.Fprintln(os.Stderr, "MCP is disabled. Set \"mcp\": {\"enabled\": true} in", *configPath)
-		return 1
-	}
 	key, err := base64Decode(cfg.EncryptionKey)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "encryption key:", err)

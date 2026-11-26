@@ -6,6 +6,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Campaigns, CampaignDetail } from './pages/Campaigns'
 import { Templates, Pages, Profiles, Groups, WebhooksPage } from './pages/Library'
 import { Settings } from './pages/Settings'
+import { PowerMenu } from './power'
 
 export type Me = {
   id: number
@@ -93,6 +94,7 @@ export function App() {
             {label}
           </a>
         ))}
+        {me.role === 'admin' && <PowerMenu />}
         <div className="spacer" />
         <div className="muted small" style={{ padding: '8px 10px' }}>
           {me.phish_url}

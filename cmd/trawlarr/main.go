@@ -113,6 +113,7 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	srv.Power = powerControl(stop, log)
 	go eng.Start(ctx)
 	go purgeSessions(ctx, st)
 	monitor := &imapmon.Monitor{
@@ -183,6 +184,24 @@ func run() error {
 		}
 	}
 	return nil
+}
+
+// powerControl wires the sidebar power menu to this process. Restart re-execs
+// the same binary with the same arguments, so it works under Docker (PID 1),
+// systemd and a plain shell alike.
+func powerControl(stop context.CancelFunc, log *slog.Logger) *api.PowerControl {
+	return &api.PowerControl{
+		Shutdown: func() { stop() },
+		Restart: func() error {
+			exe, err := os.Executable()
+			if err != nil {
+				return err
+			}
+			log.Info("re-executing the server", "path", exe)
+			// syscall.Exec only returns on failure.
+			return syscall.Exec(exe, os.Args, os.Environ())
+		},
+	}
 }
 
 func newLogger(level string) *slog.Logger {

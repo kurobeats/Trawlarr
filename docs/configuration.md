@@ -10,13 +10,25 @@ Two places: **Settings** in the UI for anything that can change while the server
 | Settings → Application | Organisation name, tracking link base URL |
 | Settings → Reporting | Mailbox monitoring: enabled, host, port, username, password, TLS, ignore certificates, folder, sender-domain restriction, delete after processing, poll interval |
 | Settings → AI | Enabled, base URL, model, API key, timeout |
+| Settings → MCP | Enable the stdio MCP server, allow tools that change data, choose the account tool calls act as |
 | Settings → Team | Users and roles |
 | Settings → Audit log | Who did what |
 | Webhooks | Signed event delivery per organisation |
 
-Secrets are write-only: the API reports `has_password` / `has_api_key` and never returns the value. Leaving the field empty keeps the stored secret; a separate checkbox removes it. Reporting settings are re-read before every poll and the AI client is rebuilt on save, so no restart is needed.
+Secrets are write-only: the API reports `has_password` / `has_api_key` and never returns the value. Leaving the field empty keeps the stored secret; a separate checkbox removes it. Reporting settings are re-read before every poll, the AI client is rebuilt on save, and MCP settings are re-read on every tool call, so no restart is needed — except that enabling MCP requires the client to relaunch the process.
 
 The tracking base URL applies to emails sent afterwards. Campaigns can override it individually, and links already delivered keep their original host.
+
+## Process control
+
+**Power** in the sidebar, admin only:
+
+| Action | Effect |
+| --- | --- |
+| Restart server | Re-executes the binary with the same arguments and environment, keeping the process id, so it works under Docker (PID 1), systemd and a plain shell. Campaigns that were sending resume from the database on start. |
+| Shut down server | Graceful stop: listeners close, the campaign runner exits. Exit code is 0, so `Restart=on-failure` supervisors leave it down until you start it. |
+
+Both are written to the audit log as `power.restart` / `power.shutdown`.
 
 ## In config.json
 
@@ -41,7 +53,7 @@ Created on first run with safe defaults. Regenerated fields (the encryption key)
 | `proxy_allowlist` | Upstream hostnames relay campaigns may target. An empty list allows nothing. |
 | `imap.*` | Fallback for reporting settings when the UI has none. |
 | `ai.*` | Fallback for AI settings when the UI has none. |
-| `mcp.enabled`, `mcp.allow_writes`, `mcp.user` | The `trawlarr mcp` server. |
+| `mcp.enabled`, `mcp.allow_writes`, `mcp.user` | Fallback for the MCP settings when the UI has none. |
 
 Environment overrides:
 

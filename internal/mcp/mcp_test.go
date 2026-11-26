@@ -321,7 +321,7 @@ func TestGetCampaignIncludesAudience(t *testing.T) {
 func TestWritesAreBlockedByDefault(t *testing.T) {
 	s := newSession(t, func(c *config.Config) { c.MCP.AllowWrites = false })
 	text, failed := s.call("create_group", map[string]any{"name": "x", "csv": "email\na@example.com\n"})
-	if !failed || !strings.Contains(text, "allow_writes") {
+	if !failed || !strings.Contains(text, "writes are disabled") {
 		t.Fatalf("write was not blocked: %q (failed=%v)", text, failed)
 	}
 	if groups, _ := s.st.Groups(1); len(groups) != 0 {
@@ -544,5 +544,68 @@ func TestReadToolsOnEmptyDatabase(t *testing.T) {
 	}
 	if text, failed := s.call("get_template", map[string]any{"id": 1}); !failed || !strings.Contains(text, "not found") {
 		t.Fatalf("missing template = %q", text)
+	}
+}
+
+// Settings changed in the UI must apply to the next tool call, without
+// restarting the MCP process.
+func TestSettingsChangesApplyLive(t *testing.T) {
+	s := newSession(t, func(c *config.Config) {
+		c.MCP.Enabled = true
+		c.MCP.AllowWrites = false
+	})
+
+	s.mustCall("list_campaigns", map[string]any{})
+	if _, failed := s.call("create_group", map[string]any{"name": "x", "csv": "email\na@example.com\n"}); !failed {
+		t.Fatal("write allowed before enabling it")
+	}
+
+	// Enable writes through the same key the Settings page writes.
+	if err := s.st.SetSetting("mcp_allow_writes", "true"); err != nil {
+		t.Fatal(err)
+	}
+	s.mustCall("create_group", map[string]any{
+		"name": "Live", "csv": "email\nalice@example.com\n",
+	})
+	groups, _ := s.st.Groups(1)
+	if len(groups) != 1 {
+		t.Fatalf("group was not created after enabling writes: %d", len(groups))
+	}
+
+	// Point the server at a viewer account: reads still work, writes do not.
+	viewer := &store.User{OrgID: 1, Username: "watcher", Role: store.RoleViewer, PasswordHash: "x"}
+	if err := s.st.CreateUser(viewer); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.st.SetSetting("mcp_user", "watcher"); err != nil {
+		t.Fatal(err)
+	}
+	s.mustCall("list_campaigns", map[string]any{})
+	text, failed := s.call("create_group", map[string]any{"name": "y", "csv": "email\nb@example.com\n"})
+	if !failed || !strings.Contains(text, "operator or admin") {
+		t.Fatalf("viewer was allowed to write: %q", text)
+	}
+	if got := s.srv.Actor().Username; got != "watcher" {
+		t.Fatalf("acting account = %q, want watcher", got)
+	}
+
+	// Switching the server off stops tool calls immediately.
+	if err := s.st.SetSetting("mcp_enabled", "false"); err != nil {
+		t.Fatal(err)
+	}
+	text, failed = s.call("list_campaigns", map[string]any{})
+	if !failed || !strings.Contains(text, "disabled") {
+		t.Fatalf("disabled server still served a tool: %q", text)
+	}
+}
+
+func TestUnknownConfiguredUser(t *testing.T) {
+	s := newSession(t, nil)
+	if err := s.st.SetSetting("mcp_user", "ghost"); err != nil {
+		t.Fatal(err)
+	}
+	text, failed := s.call("list_campaigns", map[string]any{})
+	if !failed || !strings.Contains(text, "not found") {
+		t.Fatalf("unknown actor accepted: %q", text)
 	}
 }

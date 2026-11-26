@@ -255,3 +255,60 @@ func fakeAIHandler() http.Handler {
 		w.Write([]byte(`{"choices":[{"message":{"content":"{\"subject\":\"S\",\"text_body\":\"t\",\"html_body\":\"<p>t</p>\",\"name\":\"P\",\"html\":\"<form></form>\"}"}}]}`))
 	})
 }
+
+func TestMCPSettings(t *testing.T) {
+	h := newHarness(t)
+	c := h.login()
+
+	got := h.expect(c, http.MethodGet, "/api/v1/settings", nil, http.StatusOK)
+	mcpSection, ok := got["mcp"].(map[string]any)
+	if !ok {
+		t.Fatalf("mcp section missing: %v", got)
+	}
+	for _, key := range []string{"enabled", "allow_writes", "user"} {
+		if _, present := mcpSection[key]; !present {
+			t.Errorf("mcp.%s missing from settings payload", key)
+		}
+	}
+
+	h.expect(c, http.MethodPut, "/api/v1/settings", map[string]any{
+		"mcp": map[string]any{"enabled": true, "allow_writes": true, "user": "admin"},
+	}, http.StatusOK)
+	got = h.expect(c, http.MethodGet, "/api/v1/settings", nil, http.StatusOK)
+	mcpSection = got["mcp"].(map[string]any)
+	if mcpSection["enabled"] != true || mcpSection["allow_writes"] != true || mcpSection["user"] != "admin" {
+		t.Fatalf("mcp settings not saved: %v", mcpSection)
+	}
+
+	// The MCP process reads the same keys through the config resolver.
+	eff := h.cfg.MCPFrom(h.st)
+	if !eff.Enabled || !eff.AllowWrites || eff.User != "admin" {
+		t.Fatalf("resolver disagrees with the API: %+v", eff)
+	}
+
+	// Unknown or disabled accounts are refused.
+	if status, _ := h.do(c, http.MethodPut, h.admin.URL+"/api/v1/settings",
+		map[string]any{"mcp": map[string]any{"user": "ghost"}}); status != http.StatusBadRequest {
+		t.Fatalf("unknown MCP user = %d", status)
+	}
+	h.expect(c, http.MethodPost, "/api/v1/users", map[string]any{
+		"username": "leaver", "password": "another-long-password", "role": "operator",
+	}, http.StatusCreated)
+	leaver, _ := h.st.UserByUsername("leaver")
+	leaver.Disabled = true
+	if err := h.st.UpdateUser(leaver); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := h.do(c, http.MethodPut, h.admin.URL+"/api/v1/settings",
+		map[string]any{"mcp": map[string]any{"user": "leaver"}}); status != http.StatusBadRequest {
+		t.Fatalf("disabled MCP user = %d", status)
+	}
+
+	// Clearing the user falls back to the first admin.
+	h.expect(c, http.MethodPut, "/api/v1/settings", map[string]any{
+		"mcp": map[string]any{"enabled": true, "user": ""},
+	}, http.StatusOK)
+	if h.cfg.MCPFrom(h.st).User != "" {
+		t.Fatal("clearing the MCP user did not stick")
+	}
+}

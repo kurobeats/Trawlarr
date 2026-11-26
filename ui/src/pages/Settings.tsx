@@ -17,6 +17,12 @@ type ImapSettings = {
   interval_minutes: number
 }
 
+type MCPSettings = {
+  enabled: boolean
+  allow_writes: boolean
+  user: string
+}
+
 type AISettings = {
   enabled: boolean
   base_url: string
@@ -33,9 +39,10 @@ type SettingsData = {
   events: string[]
   imap: ImapSettings
   ai: AISettings
+  mcp: MCPSettings
 }
 
-type Tab = 'account' | 'application' | 'reporting' | 'ai' | 'team' | 'audit'
+type Tab = 'account' | 'application' | 'reporting' | 'ai' | 'mcp' | 'team' | 'audit'
 
 export function Settings({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
   const [tab, setTab] = useState<Tab>('account')
@@ -67,6 +74,11 @@ export function Settings({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
           </button>
         )}
         {isAdmin && (
+          <button className={tab === 'mcp' ? 'active' : ''} onClick={() => setTab('mcp')}>
+            MCP
+          </button>
+        )}
+        {isAdmin && (
           <button className={tab === 'team' ? 'active' : ''} onClick={() => setTab('team')}>
             Team
           </button>
@@ -79,13 +91,14 @@ export function Settings({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
       <ErrorBox message={settings.error} />
 
       {tab === 'account' && <Account me={me} onMe={onMe} />}
-      {isAdmin && (tab === 'application' || tab === 'reporting' || tab === 'ai') && (
+      {isAdmin && (tab === 'application' || tab === 'reporting' || tab === 'ai' || tab === 'mcp') && (
         settings.loading ? <Loading /> :
         settings.data && (
           <>
             {tab === 'application' && <Application data={settings.data} onSaved={load} />}
             {tab === 'reporting' && <Reporting data={settings.data} onSaved={load} />}
             {tab === 'ai' && <AI data={settings.data} onSaved={load} />}
+            {tab === 'mcp' && <MCP data={settings.data} onSaved={load} />}
           </>
         )
       )}
@@ -418,6 +431,85 @@ function AI({ data, onSaved }: { data: SettingsData; onSaved: () => void }) {
           </button>
           {note && <span className="hint" style={{ marginLeft: 10 }}>{note}</span>}
         </div>
+      </form>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------------- MCP
+
+function MCP({ data, onSaved }: { data: SettingsData; onSaved: () => void }) {
+  const [form, setForm] = useState(data.mcp)
+  const [error, setError] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const users = useAsync(() => api.get<{ id: number; username: string; disabled: boolean }[]>('/api/v1/users'))
+  const set = (patch: Partial<MCPSettings>) => setForm({ ...form, ...patch })
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    setNote('')
+    try {
+      await api.put('/api/v1/settings', { mcp: form })
+      setNote('Saved. Write permission and the acting account apply to the next tool call.')
+      onSaved()
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card">
+      <h2>MCP</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        The Model Context Protocol server is a separate process your assistant launches (<span className="mono">trawlarr
+        mcp</span>). It speaks stdio only — no port, no network listener.
+      </p>
+      <ErrorBox message={error} />
+      <form onSubmit={save} style={{ maxWidth: 560 }}>
+        <label className="chip">
+          <input type="checkbox" style={{ width: 'auto' }} checked={form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
+          Allow MCP clients to connect
+        </label>
+        <p className="hint">
+          Turning this off stops tool calls on the next request. Turning it on needs the MCP client to be restarted so
+          it re-launches the process.
+        </p>
+
+        <label className="chip">
+          <input
+            type="checkbox"
+            style={{ width: 'auto' }}
+            checked={form.allow_writes}
+            onChange={(e) => set({ allow_writes: e.target.checked })}
+          />
+          Allow tools that change data
+        </label>
+        <p className="hint">
+          Creates, launches and stops. Without it the server is read-only. Applies immediately.
+        </p>
+
+        <Field label="Act as" hint="Tool calls and audit entries are attributed to this account. Defaults to the first admin.">
+          <select value={form.user} onChange={(e) => set({ user: e.target.value })}>
+            <option value="">First admin (default)</option>
+            {(users.data ?? [])
+              .filter((u) => !u.disabled)
+              .map((u) => (
+                <option key={u.id} value={u.username}>
+                  {u.username}
+                </option>
+              ))}
+          </select>
+        </Field>
+
+        <button className="primary" type="submit" disabled={busy}>
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        {note && <span className="hint" style={{ marginLeft: 10 }}>{note}</span>}
       </form>
     </div>
   )

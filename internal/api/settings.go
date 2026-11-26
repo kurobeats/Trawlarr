@@ -33,6 +33,12 @@ type imapSettings struct {
 	IntervalMinutes int    `json:"interval_minutes"`
 }
 
+type mcpSettings struct {
+	Enabled     bool   `json:"enabled"`
+	AllowWrites bool   `json:"allow_writes"`
+	User        string `json:"user"`
+}
+
 type aiSettings struct {
 	Enabled        bool   `json:"enabled"`
 	BaseURL        string `json:"base_url"`
@@ -53,6 +59,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		"version":   Version,
 		"imap":      s.imapSettings(),
 		"ai":        s.aiSettings(),
+		"mcp":       s.mcpSettings(),
 	}
 	if org != nil {
 		out["org_name"] = org.Name
@@ -68,6 +75,7 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		PhishPublicURL *string       `json:"phish_public_url"`
 		IMAP           *imapSettings `json:"imap"`
 		AI             *aiSettings   `json:"ai"`
+		MCP            *mcpSettings  `json:"mcp"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -107,6 +115,13 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		changed = append(changed, "imap")
+	}
+	if req.MCP != nil {
+		if err := s.saveMCPSettings(me.OrgID, req.MCP); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		changed = append(changed, "mcp")
 	}
 	if req.AI != nil {
 		if err := s.saveAISettings(req.AI); err != nil {
@@ -241,6 +256,40 @@ func (s *Server) saveIMAPSettings(in *imapSettings) error {
 			return err
 		}
 		if err := s.Store.SetSetting("imap_password", sealed); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// -------------------------------------------------------------------- MCP
+
+func (s *Server) mcpSettings() mcpSettings {
+	cur := s.Cfg.MCPFrom(s.Store)
+	return mcpSettings{Enabled: cur.Enabled, AllowWrites: cur.AllowWrites, User: cur.User}
+}
+
+func (s *Server) saveMCPSettings(orgID int64, in *mcpSettings) error {
+	user := strings.TrimSpace(in.User)
+	if user != "" {
+		u, err := s.Store.UserByUsername(user)
+		if err != nil || u.OrgID != orgID {
+			return errors.New("MCP user does not exist")
+		}
+		if u.Disabled {
+			return errors.New("MCP user is disabled")
+		}
+		if store.Rank(u.Role) < store.Rank(store.RoleViewer) {
+			return errors.New("MCP user needs a valid role")
+		}
+	}
+	pairs := map[string]string{
+		"mcp_enabled":      strconv.FormatBool(in.Enabled),
+		"mcp_allow_writes": strconv.FormatBool(in.AllowWrites),
+		"mcp_user":         user,
+	}
+	for k, v := range pairs {
+		if err := s.Store.SetSetting(k, v); err != nil {
 			return err
 		}
 	}
