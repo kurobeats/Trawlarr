@@ -1,8 +1,8 @@
 # Trawlarr
 
-An open-source phishing simulation platform. Single binary, embedded UI, SQLite by default, and a migration path from Gophish databases.
+An open-source phishing simulation platform. Single binary, embedded UI, SQLite by default, and a migration path for existing databases.
 
-Trawlarr is a from-scratch successor to [Gophish](https://github.com/gophish/gophish), not a fork. It keeps the objects people already understand — groups, templates, landing pages, sending profiles, campaigns — and rebuilds the parts that hurt in practice: the retired AngularJS front end, the untyped tracking state, the leaked product headers, and the migration story.
+Trawlarr covers the full simulation loop: recipient groups, email templates, landing pages, sending profiles and campaigns, with per-recipient tracking for opens, clicks, submissions and reports. It is written from scratch rather than forked from another tool, so the internals are explicit SQL, typed events and a modern UI.
 
 Use it for authorised security awareness training and red-team engagements. **You are responsible for having permission for every domain, mailbox and recipient you target.**
 
@@ -14,25 +14,27 @@ Use it for authorised security awareness training and red-team engagements. **Yo
 - Immediate, scheduled, or send-by-date delivery with an optional rate limit (emails/hour) and random jitter.
 - Stop, resume, and "resend failed" without duplicating recipients.
 - Three delivery outcomes per recipient: `sent`, `failed`, and `uncertain` — the last one covers timeouts and resets that happen after the message may have been handed to the relay, so you never blind-resend to people who already got it.
-- Full per-recipient timeline plus a campaign timeline, both immutable event rows.
+- Full per-recipient timeline plus a campaign timeline, both append-only event rows.
+- Optional AI analysis of a finished campaign (see [AI](#ai-drafting-and-analysis)).
 
 **Content**
-- Email templates with Gophish-compatible placeholders (`{{.FirstName}}`, `{{.URL}}`, `{{.Tracker}}`, `{{.From}}`, `{{.BaseURL}}`, …) plus `{{.OptOutURL}}` and `{{.ReportURL}}`.
+- Email templates with the usual placeholders (`{{.FirstName}}`, `{{.URL}}`, `{{.Tracker}}`, `{{.From}}`, `{{.BaseURL}}`, …) plus `{{.OptOutURL}}` and `{{.ReportURL}}`.
 - Attachments, including templated attachment filenames.
-- Landing pages: hand-written HTML, or clone a live page from a URL (assets are absolutised, CSP/integrity stripped).
+- Landing pages: hand-written HTML, or clone a live page from a URL (assets absolutised, CSP and integrity attributes stripped).
 - Forms on a landing page are automatically repointed at the capture endpoint.
-- Optional per-campaign **relay mode** (see [Relay mode](#relay-mode-aitm)).
+- Optional per-campaign **relay mode** (see [Relay mode](#relay-mode)).
 
 **People and access**
 - Recipient groups with CSV import (flexible headers, BOM-safe, deduplicated).
 - Roles: `admin`, `operator`, `viewer`, enforced on every endpoint.
-- Argon2id passwords with transparent upgrade of imported bcrypt hashes, TOTP two-factor, hashed API keys, session rotation on password change.
-- Audit log for logins, object changes, launches and settings updates.
+- Argon2id passwords, TOTP two-factor, hashed API keys, session rotation on password change.
+- Audit log for logins, object changes, launches, AI calls and settings updates.
 
 **Integrations**
 - Signed webhooks (`X-Webhook-Signature: sha256=…`) for every campaign event, with retries.
-- IMAP report mailbox: messages recipients report back are matched to the original recipient through the `Message-ID` (no identifying header is added to outgoing mail).
+- IMAP report mailbox: messages recipients report back are matched to the original recipient through the `Message-ID`, so no identifying header is added to outgoing mail.
 - Bearer-token REST API covering the same operations as the UI.
+- Model Context Protocol server over stdio for AI assistants (`trawlarr mcp`).
 
 **Privacy**
 - Capturing entered values is **off by default**. A submission records which fields were filled (`username`, `password`, …) and nothing else.
@@ -79,7 +81,7 @@ docker logs trawlarr | grep -A3 admin   # one-time password
 
 ## Configuration
 
-`config.json` is created on first run and rewritten when new defaults are needed. See `config.example.json`.
+`config.json` is created on first run. See `config.example.json`.
 
 | Key | Meaning |
 | --- | --- |
@@ -87,20 +89,22 @@ docker logs trawlarr | grep -A3 admin   # one-time password
 | `phish_server.listen_url` | Tracking + landing page address. Set both to the same value to serve everything from one port. |
 | `phish_server.public_url` | Origin used in tracking links. Required when `listen_url` is a wildcard or behind a proxy. |
 | `db_path` | SQLite file. WAL mode and a 10s busy timeout are set automatically. |
-| `encryption_key` | Base64 of 32 bytes, generated on first run. Encrypts SMTP passwords, captured values and relay sessions. Changing it makes those unreadable. |
+| `encryption_key` | Base64 of 32 bytes, generated on first run. Encrypts SMTP passwords, captured values, relay sessions and stored mailbox credentials. |
 | `trusted_origins` | Extra origins accepted for state-changing requests when the admin UI sits behind a proxy. |
 | `trust_proxy` | Use `X-Forwarded-For` for client IPs. Only enable behind a proxy you control. |
 | `secure_cookies` | Mark the session cookie `Secure`. Set this whenever the admin UI is served over HTTPS. |
-| `proxy_enabled` / `proxy_allowlist` | Enable relay mode and list the upstream hosts you are allowed to relay. Empty allowlist means nothing is allowed. |
-| `imap` | Report mailbox. A database imported from Gophish supplies these too. |
+| `proxy_enabled` / `proxy_allowlist` | Enable relay mode and list the upstream hosts you are allowed to relay. An empty allowlist allows nothing. |
+| `imap` | Report mailbox. A database imported from another instance supplies these too. |
+| `ai` | Optional OpenAI-compatible endpoint for drafting and analysis. |
+| `mcp` | Optional Model Context Protocol server (`trawlarr mcp`). |
 
 ---
 
-## Relay mode (AiTM)
+## Relay mode
 
 A campaign can either serve a static landing page or relay a live site. Relay mode is a reverse proxy with a per-recipient cookie jar: the victim talks to your domain, Trawlarr talks to the real one, and the session cookies the real site issues are captured so an engagement team can show what that session had access to.
 
-This is the same capability as Evilginx, and it is deliberately gated:
+This is a powerful capability, so it is deliberately gated:
 
 1. `proxy_enabled` must be `true` in `config.json`.
 2. The upstream host must match an entry in `proxy_allowlist`.
@@ -114,7 +118,7 @@ Limits to know before you promise anyone the moon: JavaScript-heavy apps, WebSoc
 
 ---
 
-## Migrating from Gophish
+## Importing an existing database
 
 ```sh
 ./trawlarr import-gophish -config config.json -from /var/lib/gophish/gophish.db
@@ -126,7 +130,7 @@ MySQL sources work too:
 ./trawlarr import-gophish -from 'mysql://user:pass@host:3306/gophish'
 ```
 
-The importer reads tables by column name, so databases from roughly Gophish 0.5 onward import. It refuses to write into a non-empty destination unless you pass `-force`.
+The importer reads tables by column name, so databases created by any release from roughly 0.5 onward import. It refuses to write into a non-empty destination unless you pass `-force`.
 
 | Imported | Notes |
 | --- | --- |
@@ -137,31 +141,31 @@ The importer reads tables by column name, so databases from roughly Gophish 0.5 
 | Landing pages | Capture flags map across; value capture stays off. |
 | Sending profiles | `host:port` is split; SMTP passwords are re-encrypted with the Trawlarr key. Headers are kept. |
 | Campaigns | Statuses map across. **Nothing is auto-launched**: a campaign that was mid-send arrives as `stopped`. |
-| Results and events | Milestones are rebuilt from the event stream, so funnel numbers match what Gophish showed. |
+| Results and events | Milestones are rebuilt from the event stream, so funnel numbers match the source. |
 | Webhooks | Imported disabled-by-default event filter set to all. |
-| IMAP settings | Imported; confirm the password in `config.json` before enabling. |
+| IMAP settings | Imported; confirm the password before enabling the monitor. |
 
-Not imported: `maillogs`, per-recipient geo coordinates, and Gophish's own session/auth tables. Gophish's `X-Gophish-*` headers are not reproduced anywhere.
+Not imported: mail logs, per-recipient geo coordinates, and session tables.
 
-See [docs/gophish-parity.md](docs/gophish-parity.md) for the issue-by-issue decisions.
+See [docs/design-rationale.md](docs/design-rationale.md) for the reasoning behind individual behaviours.
 
 ---
 
 ## Sending without the usual tells
 
-Out of the box Gophish fingerprints itself. These are fixed here rather than patched per engagement:
+Several details commonly leak which tool sent an email or which tool serves a landing page. These are fixed in the code, not patched per engagement:
 
-| Tell | Gophish | Trawlarr |
-| --- | --- | --- |
-| Product headers | `X-Gophish-Contact`, `X-Gophish-Signature` | none |
-| `X-Mailer` | `gophish` | omitted unless the profile sets one |
-| EHLO/HELO | OS hostname (set by the Ansible role, otherwise the machine name) | the `From` domain, always |
-| `Message-ID` domain | derived from hostname | the `From` domain |
-| `Message-ID` value | random | random, with the recipient id in the local part so reports can be matched later |
-| Tracking param | `rid`, 7 alphanumeric characters (~10^12 guesses) | `rid`, 72 bits of randomness |
-| 404 page | distinctive per-product page | neutral page, no product strings, no `Server` header |
-| Cookies | product-named | generic names, only on the admin origin |
-| Landing link | redirect chain through `/track` | one request; the page is rendered at the tracked URL |
+| Problem | What Trawlarr does |
+| --- | --- |
+| Vendor headers in mail | none at all |
+| `X-Mailer` naming the tool | omitted unless the sending profile sets one |
+| EHLO/HELO sending the OS hostname | the `From` domain, always |
+| `Message-ID` built from the hostname | the `From` domain |
+| `Message-ID` revealing nothing useful | random, with the recipient id in the local part so reported messages can be matched later |
+| Short, enumerable recipient ids | 72 bits of randomness |
+| Error pages that identify the software | neutral page, no product strings, no `Server` header |
+| Product-named cookies | generic names, only on the admin origin |
+| A redirect hop before the landing page | one request; the page is rendered at the tracked URL |
 
 There is no `os.Hostname()` call anywhere in the codebase; you can verify with `grep -r Hostname --include='*.go'`.
 
@@ -169,17 +173,80 @@ Deliverability still depends on your infrastructure: SPF, DKIM and DMARC must be
 
 ---
 
+## AI drafting and analysis
+
+Any endpoint that implements `POST /chat/completions` works — hosted APIs, Ollama, vLLM, LM Studio, a gateway in front of several providers.
+
+```json
+"ai": {
+  "enabled": true,
+  "base_url": "http://127.0.0.1:11434/v1",
+  "model": "llama3.1:8b",
+  "api_key": "",
+  "timeout_seconds": 45
+}
+```
+
+With it enabled:
+
+- **Draft an email or landing page** from a short brief, in the template and page editors or through the API.
+- **Analyse a campaign** on the campaign page: a short risk assessment with a recommended next action.
+- The same tools are available to MCP clients.
+
+Analysis only ever sends aggregate numbers — recipient counts and event totals. Drafting sends your brief. No recipient addresses or captured values leave the process.
+
+The API key can also come from `TRAWLARR_AI_API_KEY`, which keeps it out of the config file.
+
+---
+
+## MCP server
+
+`trawlarr mcp` speaks the Model Context Protocol over **stdio**, so an assistant launches it as a child process. There is no network listener, no extra port and no unauthenticated endpoint to forget about.
+
+```json
+"mcp": {
+  "enabled": true,
+  "allow_writes": false,
+  "user": "admin"
+}
+```
+
+- `user` selects the account tool calls act as; the first admin is used when empty.
+- `allow_writes` gates `create_*`, `launch_campaign` and `stop_campaign`. Read tools always work.
+- Every call is written to the audit log as `mcp.<tool>`.
+
+Example client entry:
+
+```json
+{
+  "mcpServers": {
+    "trawlarr": {
+      "command": "/usr/local/bin/trawlarr",
+      "args": ["mcp", "-config", "/var/lib/trawlarr/config.json"]
+    }
+  }
+}
+```
+
+Tools: `dashboard`, `list_campaigns`, `get_campaign`, `export_campaign`, `analyze_campaign`, `list_groups`, `list_templates`, `get_template`, `list_landing_pages`, `list_sending_profiles`, `draft_email`, `draft_landing_page`, `create_group`, `create_template`, `create_landing_page`, `create_campaign`, `launch_campaign`, `stop_campaign`.
+
+`launch_campaign` queues the campaign rather than sending from the MCP process; the running server picks it up within a couple of seconds. Clients should send an `arguments` object (empty is fine) with every tool call.
+
+---
+
 ## Architecture
 
 ```
-cmd/trawlarr          binary, flags, import subcommand
+cmd/trawlarr          binary, flags, import and mcp subcommands
 internal/api          admin REST API, tracking endpoints, relay proxy
 internal/engine       campaign runner: rendering, pacing, retries, outcomes
 internal/store        typed data access over SQLite (unix-second timestamps)
-internal/mail         SMTP delivery via go-mail, MIME and headers
+internal/mail         SMTP delivery, MIME and headers
+internal/ai           OpenAI-compatible drafting and analysis
+internal/mcp          Model Context Protocol tools over stdio
 internal/imapmon      report mailbox poller
 internal/notify       signed webhook delivery with retries
-internal/gophish      Gophish database importer
+internal/gophish      database importer
 internal/web          embedded UI bundle
 ui/                   React + TypeScript admin interface
 ```
@@ -198,11 +265,14 @@ All admin endpoints live under `/api/v1` and accept either the session cookie or
 POST /api/v1/login                     {username, password, totp?}
 GET  /api/v1/me
 GET  /api/v1/dashboard
+POST /api/v1/ai/generate               {kind: email|landing_page, prompt}
+GET  /api/v1/ai/status
 GET  /api/v1/campaigns                 list with stats
 POST /api/v1/campaigns                 create
 POST /api/v1/campaigns/{id}/launch
 POST /api/v1/campaigns/{id}/stop
 POST /api/v1/campaigns/{id}/resend
+POST /api/v1/campaigns/{id}/analyze    AI risk assessment
 GET  /api/v1/campaigns/{id}/export     CSV results
 GET  /api/v1/campaigns/{id}/targets/{tid}/session
 GET|POST|PUT|DELETE /api/v1/{groups,templates,pages,profiles,attachments,webhooks}
@@ -213,25 +283,30 @@ GET|POST|PUT|DELETE /api/v1/users      admin only
 GET  /api/v1/audit
 ```
 
-Public tracking endpoint (phishing listener): `/open.gif?rid=`, `/click?rid=`, `/submit?rid=` (POST), `/report?rid=`, `/optout?rid=`, and `/px/<rid>/…` for relay campaigns.
+Public tracking endpoints (phishing listener): `/open.gif?rid=`, `/click?rid=`, `/submit?rid=` (POST), `/report?rid=`, `/optout?rid=`, and `/px/<rid>/…` for relay campaigns.
 
 ---
 
 ## Development
 
 ```sh
-make test     # go test ./... (includes fuzz seed corpus)
+make test     # go test -race -count=1 ./...   (full suite, race detector)
+make test-short
+make cover    # coverage summary + coverage.html
 make lint     # go vet + tsc --noEmit
 make dev      # API on :3333 and Vite on :5173
 ```
 
+The suite covers every package, including HTTP-level tests against a real server instance, a stdio MCP session driven over pipes, an in-process SMTP sink that inspects the bytes on the wire, an importer-shaped fixture database, and process-level tests that build and run the binary (startup, single-port mode, graceful shutdown). CI runs `go vet`, the race-enabled suite, `tsc --noEmit`, the UI build and gosec.
+
 The UI is built into `internal/web/dist` and embedded; `go build ./...` works on a fresh clone because the built bundle is committed. Run `make ui` after changing anything in `ui/`.
 
-Useful fuzz targets:
+Fuzz targets:
 
 ```sh
 go test -fuzz=FuzzParseTargetCSV ./internal/api
 go test -fuzz=FuzzSetCookieParsing ./internal/api
+go test -fuzz=FuzzRewriteLinks ./internal/api
 ```
 
 ---
@@ -240,13 +315,10 @@ go test -fuzz=FuzzSetCookieParsing ./internal/api
 
 - SQLite only. A single instance is plenty for the campaign volumes this tool is built for; there is no horizontal scaling path.
 - Relay mode does not execute JavaScript, so origin checks and WebSockets can break it.
-- HTML templates are rendered with `text/template` (like Gophish) so authors can write raw markup. Templates and landing pages are trusted admin input — do not hand an operator account to someone who should not be able to run arbitrary markup.
-- Geo-IP enrichment, XLSX export and UI translations are not implemented. CSV export, a dashboard, and the API cover the same reporting needs.
+- HTML templates are rendered with `text/template` so authors can write raw markup. Templates and landing pages are trusted admin input — do not hand an operator account to someone who should not be able to run arbitrary markup.
+- Geo-IP enrichment and UI translations are not implemented. CSV export, the dashboard, the API and MCP cover reporting needs.
 - The webhook queue is in memory; events emitted while the process is down are not replayed.
-
-## Prior art
-
-Gophish is the reference implementation and the reason the objects look the way they do. [Ruphish](https://github.com/srothgan/ruphish) independently reached several of the same conclusions (privacy-first capture, uncertain delivery, Gophish migration) and is worth a look if you prefer Rust.
+- The MCP server is stdio-only by design. Exposing it over the network is left to an MCP gateway you control.
 
 ## License
 

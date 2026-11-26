@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -101,6 +102,9 @@ func (s *Store) UsersByOrg(orgID int64) ([]*User, error) {
 
 // CreateUser inserts a user, returning a friendly error on duplicates.
 func (s *Store) CreateUser(u *User) error {
+	if Rank(u.Role) == 0 {
+		return fmt.Errorf("invalid role %q", u.Role)
+	}
 	res, err := s.db.Exec(`INSERT INTO users (org_id, username, email, password_hash, role, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, u.OrgID, u.Username, u.Email, u.PasswordHash, u.Role, now(), now())
 	if err != nil {
@@ -115,6 +119,9 @@ func (s *Store) CreateUser(u *User) error {
 
 // UpdateUser writes mutable profile fields.
 func (s *Store) UpdateUser(u *User) error {
+	if Rank(u.Role) == 0 {
+		return fmt.Errorf("invalid role %q", u.Role)
+	}
 	_, err := s.db.Exec(`UPDATE users SET email = ?, role = ?, disabled = ?, updated_at = ? WHERE id = ?`,
 		u.Email, u.Role, u.Disabled, now(), u.ID)
 	return err
@@ -143,6 +150,12 @@ func (s *Store) SetTOTP(userID int64, secret string, enabled bool) error {
 func (s *Store) DeleteUser(id int64) error {
 	_, err := s.db.Exec(`DELETE FROM users WHERE id = ?`, id)
 	return err
+}
+
+// FirstAdmin returns the oldest enabled admin, used as the MCP actor.
+func (s *Store) FirstAdmin() (*User, error) {
+	return scanUser(s.db.QueryRow(`SELECT ` + userCols + ` FROM users
+		WHERE role = 'admin' AND disabled = 0 ORDER BY id LIMIT 1`))
 }
 
 // CountAdmins guards against removing the last administrator.

@@ -47,7 +47,7 @@ func HashPassword(password string) (string, error) {
 }
 
 // VerifyPassword checks a password against an argon2id or legacy bcrypt hash.
-// gophish databases store bcrypt, so imported accounts keep working.
+// Imported databases store bcrypt hashes, so migrated accounts keep working.
 func VerifyPassword(hash, password string) bool {
 	switch {
 	case strings.HasPrefix(hash, "$argon2id$"):

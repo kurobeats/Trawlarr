@@ -49,13 +49,6 @@ func nullInt(v sql.NullInt64) int64 {
 	return 0
 }
 
-func nullStr(v sql.NullString) string {
-	if v.Valid {
-		return v.String
-	}
-	return ""
-}
-
 // jsonInts marshals a list of ids for storage in a TEXT column.
 func jsonInts(ids []int64) string {
 	if ids == nil {
@@ -179,6 +172,19 @@ func (s *Store) OrgCount() (int, error) {
 	return n, err
 }
 
+// deleteScoped removes a row that belongs to an org and reports a miss as
+// ErrNotFound, so callers never claim to have deleted someone else's record.
+func (s *Store) deleteScoped(table string, orgID, id int64) error {
+	res, err := s.db.Exec(`DELETE FROM `+table+` WHERE id = ? AND org_id = ?`, id, orgID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // MustJSON is a tiny helper for building detail strings.
 func MustJSON(v any) string {
 	b, err := json.Marshal(v)
@@ -187,6 +193,9 @@ func MustJSON(v any) string {
 	}
 	return string(b)
 }
+
+// DB exposes the handle for migrations and tests. Prefer the typed methods.
+func (s *Store) DB() *sql.DB { return s.db }
 
 // Tx runs fn inside a single transaction.
 func (s *Store) Tx(fn func(*sql.Tx) error) error {

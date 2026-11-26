@@ -330,6 +330,17 @@ func (s *Store) SaveCampaign(c *Campaign, id int64) error {
 	return nil
 }
 
+// CampaignStatus reads just the status, used by the runner to notice a stop
+// issued by another process (the MCP server, for example).
+func (s *Store) CampaignStatus(id int64) (string, error) {
+	var status string
+	err := s.db.QueryRow(`SELECT status FROM campaigns WHERE id = ?`, id).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return status, err
+}
+
 // SetCampaignStatus updates the lifecycle state.
 func (s *Store) SetCampaignStatus(id int64, status string) error {
 	now := now()
@@ -350,8 +361,7 @@ func (s *Store) SetCampaignStatus(id int64, status string) error {
 
 // DeleteCampaign removes a campaign and its results.
 func (s *Store) DeleteCampaign(orgID, id int64) error {
-	_, err := s.db.Exec(`DELETE FROM campaigns WHERE id = ? AND org_id = ?`, id, orgID)
-	return err
+	return s.deleteScoped("campaigns", orgID, id)
 }
 
 // Events lists a campaign timeline, newest first.

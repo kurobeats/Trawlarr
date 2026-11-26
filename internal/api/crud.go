@@ -1,10 +1,8 @@
 package api
 
 import (
-	"bufio"
 	"bytes"
 	"context"
-	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
@@ -133,88 +131,9 @@ func (s *Server) handleImportGroupCSV(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"targets": targets, "count": len(targets)})
 }
 
-// ParseTargetCSV reads recipients from CSV, accepting gophish-style exports.
+// ParseTargetCSV reads recipients from CSV, accepting common export layouts.
 func ParseTargetCSV(rd io.Reader) ([]store.Target, error) {
-	raw, err := io.ReadAll(rd)
-	if err != nil {
-		return nil, err
-	}
-	raw = bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF}) // strip UTF-8 BOM
-	reader := csv.NewReader(bufio.NewReader(bytes.NewReader(raw)))
-	reader.FieldsPerRecord = -1
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, fmt.Errorf("invalid CSV: %w", err)
-	}
-	if len(records) == 0 {
-		return nil, errors.New("CSV is empty")
-	}
-	header := map[string]int{}
-	start := 0
-	first := strings.ToLower(strings.Join(records[0], ","))
-	if strings.Contains(first, "email") && !strings.Contains(first, "@") {
-		for i, col := range records[0] {
-			// "First Name" and "first-name" both mean first_name.
-			norm := strings.NewReplacer(" ", "_", "-", "_").Replace(strings.ToLower(strings.TrimSpace(col)))
-			header[norm] = i
-		}
-		start = 1
-	} else {
-		header = map[string]int{"first_name": 0, "last_name": 1, "email": 2, "position": 3}
-	}
-	get := func(row []string, key string) string {
-		i, ok := header[key]
-		if !ok || i >= len(row) {
-			return ""
-		}
-		return strings.TrimSpace(row[i])
-	}
-	known := map[string]bool{}
-	for _, k := range []string{"first_name", "last_name", "email", "position", "firstname", "lastname"} {
-		known[k] = true
-	}
-	var out []store.Target
-	seen := map[string]bool{}
-	for _, row := range records[start:] {
-		email := get(row, "email")
-		if email == "" || !strings.Contains(email, "@") {
-			continue
-		}
-		key := strings.ToLower(email)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		t := store.Target{
-			Email:     email,
-			FirstName: firstNonEmpty(get(row, "first_name"), get(row, "firstname")),
-			LastName:  firstNonEmpty(get(row, "last_name"), get(row, "lastname")),
-			Position:  get(row, "position"),
-			Custom:    map[string]string{},
-		}
-		for col, i := range header {
-			if known[col] || i >= len(row) {
-				continue
-			}
-			if v := strings.TrimSpace(row[i]); v != "" {
-				t.Custom[col] = v
-			}
-		}
-		out = append(out, t)
-	}
-	if len(out) == 0 {
-		return nil, errors.New("no valid recipients found (need an email column)")
-	}
-	return out, nil
-}
-
-func firstNonEmpty(vals ...string) string {
-	for _, v := range vals {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
+	return store.ParseTargetsCSV(rd)
 }
 
 // --------------------------------------------------------------- templates
@@ -376,7 +295,7 @@ func (s *Server) handleDeletePage(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleImportLandingPage clones a live page and rewrites its asset URLs so it
-// renders from Trawlarr. Fixes the "images are broken" reports against gophish.
+// renders from Trawlarr, so imported pages do not arrive with broken images.
 func (s *Server) handleImportLandingPage(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		URL string `json:"url"`

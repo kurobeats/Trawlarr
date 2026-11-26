@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kurobeats/trawlarr/internal/ai"
 	"github.com/kurobeats/trawlarr/internal/config"
 	"github.com/kurobeats/trawlarr/internal/engine"
 	"github.com/kurobeats/trawlarr/internal/mail"
@@ -33,6 +34,7 @@ type Server struct {
 	Log    *slog.Logger
 	Cfg    *config.Config
 	UI     fs.FS
+	AI     *ai.Client
 
 	limiter  *limiter
 	proxyJar *proxyJars
@@ -40,7 +42,12 @@ type Server struct {
 
 // New wires a Server.
 func New(s *store.Store, e *engine.Engine, sender mail.Sender, hub *notify.Dispatcher, cfg *config.Config, log *slog.Logger, ui fs.FS) *Server {
-	return &Server{Store: s, Engine: e, Sender: sender, Hub: hub, Cfg: cfg, Log: log, UI: ui, limiter: newLimiter(), proxyJar: newProxyJars()}
+	srv := &Server{Store: s, Engine: e, Sender: sender, Hub: hub, Cfg: cfg, Log: log, UI: ui,
+		limiter: newLimiter(), proxyJar: newProxyJars()}
+	if cfg != nil {
+		srv.AI = ai.New(cfg.AI)
+	}
+	return srv
 }
 
 // routes registers admin endpoints.
@@ -53,6 +60,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/me/totp/setup", s.authenticated(s.handleTOTPSetup))
 	mux.Handle("POST /api/v1/me/totp/enable", s.authenticated(s.handleTOTPEnable))
 	mux.Handle("POST /api/v1/me/totp/disable", s.authenticated(s.handleTOTPDisable))
+
+	mux.Handle("GET /api/v1/ai/status", s.viewer(s.handleAIStatus))
+	mux.Handle("POST /api/v1/ai/generate", s.operator(s.handleAIGenerate))
 
 	mux.Handle("GET /api/v1/dashboard", s.viewer(s.handleDashboard))
 	mux.Handle("GET /api/v1/audit", s.viewer(s.handleAudit))
@@ -104,6 +114,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/campaigns/{id}/resend", s.operator(s.handleResendCampaign))
 	mux.Handle("GET /api/v1/campaigns/{id}/export", s.viewer(s.handleExportCampaign))
 	mux.Handle("GET /api/v1/campaigns/{id}/targets/{tid}/session", s.viewer(s.handleTargetSession))
+	mux.Handle("POST /api/v1/campaigns/{id}/analyze", s.operator(s.handleAnalyzeCampaign))
 
 	mux.Handle("GET /api/v1/users", s.admin(s.handleListUsers))
 	mux.Handle("POST /api/v1/users", s.admin(s.handleCreateUser))
@@ -114,12 +125,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("PUT /api/v1/settings", s.admin(s.handleUpdateSettings))
 
 	mux.Handle("GET /api/v1/health", s.public(s.handleHealth))
-	mux.Handle("/", s.serveUI())
 }
 
-// publicRoutes registers the endpoints recipients touch. These never require
-// authentication and must stay cheap.
-func (s *Server) publicRoutes(mux *http.ServeMux) {
+// trackingRoutes registers the endpoints recipients touch. Each listener adds
+// its own catch-all so admin and combined modes cannot collide.
+func (s *Server) trackingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/px/", s.handleProxyRelay)
 	mux.HandleFunc("GET /open.gif", s.handleOpen)
 	mux.HandleFunc("GET /click", s.handleClick)
@@ -131,35 +141,51 @@ func (s *Server) publicRoutes(mux *http.ServeMux) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("User-agent: *\nDisallow: /\n"))
 	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Old-style links land on "/" with ?rid=; treat them as clicks.
-		if r.URL.Query().Get("rid") != "" {
-			s.handleClick(w, r)
-			return
-		}
-		serveNotFound(w)
-	})
+}
+
+// phishFallback answers everything else on the phishing listener. Old-style
+// links land on "/" with ?rid=, so those are treated as clicks.
+func (s *Server) phishFallback(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("rid") != "" && r.Method == http.MethodGet {
+		s.handleClick(w, r)
+		return
+	}
+	serveNotFound(w)
 }
 
 // AdminHandler serves the admin API plus the embedded UI.
 func (s *Server) AdminHandler() http.Handler {
 	mux := http.NewServeMux()
 	s.routes(mux)
+	mux.Handle("/", s.serveUI())
 	return s.securityHeaders(mux)
 }
 
 // PhishHandler serves only tracking and landing endpoints.
 func (s *Server) PhishHandler() http.Handler {
 	mux := http.NewServeMux()
-	s.publicRoutes(mux)
+	s.trackingRoutes(mux)
+	mux.HandleFunc("/", s.phishFallback)
 	return mux
 }
 
-// CombinedHandler is used when both servers listen on the same address.
+// CombinedHandler serves both audiences from one listener when the admin and
+// phishing addresses match.
 func (s *Server) CombinedHandler() http.Handler {
 	mux := http.NewServeMux()
-	s.publicRoutes(mux)
+	s.trackingRoutes(mux)
 	s.routes(mux)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("rid") != "" && r.Method == http.MethodGet {
+			s.handleClick(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+		s.serveUI().ServeHTTP(w, r)
+	})
 	return s.securityHeaders(mux)
 }
 

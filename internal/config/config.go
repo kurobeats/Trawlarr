@@ -36,6 +36,22 @@ type IMAP struct {
 	IntervalMinutes int    `json:"interval_minutes"`
 }
 
+// AI configures an optional OpenAI-compatible endpoint for drafting content.
+type AI struct {
+	Enabled        bool   `json:"enabled"`
+	BaseURL        string `json:"base_url"`
+	APIKey         string `json:"api_key"`
+	Model          string `json:"model"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
+}
+
+// MCP configures the Model Context Protocol server (`trawlarr mcp`).
+type MCP struct {
+	Enabled     bool   `json:"enabled"`
+	AllowWrites bool   `json:"allow_writes"`
+	User        string `json:"user"`
+}
+
 // Config is the on-disk configuration file.
 type Config struct {
 	AdminServer  Server   `json:"admin_server"`
@@ -53,6 +69,8 @@ type Config struct {
 	ProxyEnabled   bool     `json:"proxy_enabled"`
 	ProxyAllowlist []string `json:"proxy_allowlist"`
 	IMAP IMAP `json:"imap"`
+	AI   AI   `json:"ai"`
+	MCP  MCP  `json:"mcp"`
 	// SeedAdminPassword, when set, is used for the initial admin account on a
 	// fresh database instead of a generated one.
 	SeedAdminPassword string `json:"-"`

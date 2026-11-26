@@ -35,6 +35,8 @@ func main() {
 		switch os.Args[1] {
 		case "import-gophish":
 			os.Exit(runImport(os.Args[2:]))
+		case "mcp":
+			os.Exit(runMCP(os.Args[2:]))
 		case "version", "-version", "--version":
 			fmt.Println("trawlarr", version)
 			return
@@ -53,6 +55,7 @@ func usage() {
 	fmt.Fprint(os.Stderr, `trawlarr - phishing simulation platform
 
   trawlarr [-config config.json]        run the server
+  trawlarr mcp [-config config.json]    run the Model Context Protocol server (stdio)
   trawlarr import-gophish -from FILE    import a gophish SQLite database
   trawlarr version                      print the version
 `)

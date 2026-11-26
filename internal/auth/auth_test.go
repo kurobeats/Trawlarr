@@ -33,13 +33,13 @@ func TestShortPasswordRejected(t *testing.T) {
 	}
 }
 
-// Imported gophish accounts store bcrypt hashes and must keep working.
+// Accounts migrated from another database store bcrypt hashes and keep working.
 func TestLegacyBcrypt(t *testing.T) {
-	hash, err := bcrypt.GenerateFromPassword([]byte("gophish-legacy"), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte("legacy-bcrypt-password"), bcrypt.DefaultCost)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !VerifyPassword(string(hash), "gophish-legacy") {
+	if !VerifyPassword(string(hash), "legacy-bcrypt-password") {
 		t.Fatal("bcrypt password rejected")
 	}
 	if !NeedsRehash(string(hash)) {

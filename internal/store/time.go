@@ -113,8 +113,5 @@ func (t Time) Value() (driver.Value, error) {
 	return t.Time().Unix(), nil
 }
 
-// Ptr is a convenience for optional timestamps.
-func Ptr(t Time) *Time { return &t }
-
 // ErrNoRows re-exports sql.ErrNoRows so callers need one error import.
 var ErrNoRows = errors.New("sql: no rows in result set")

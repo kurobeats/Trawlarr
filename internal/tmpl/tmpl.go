@@ -19,8 +19,8 @@ type Recipient struct {
 	Custom    map[string]string
 }
 
-// Context is what a template sees. Field names match gophish so existing
-// templates render unchanged.
+// Context is what a template sees. Field names follow the de-facto template
+// vocabulary so existing templates render unchanged.
 type Context struct {
 	Recipient
 	From        string
@@ -35,7 +35,7 @@ type Context struct {
 }
 
 // NewContext builds the template context for one recipient.
-// urlTemplate may itself contain placeholders (gophish allows this).
+// urlTemplate may itself contain placeholders (existing templates do this).
 func NewContext(fromAddress, baseURL, rid string, r Recipient) (Context, error) {
 	name := fromAddress
 	if addr, err := mail.ParseAddress(fromAddress); err == nil {

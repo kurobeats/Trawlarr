@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, errorText } from '../api'
+import { DraftPanel, useAIStatus } from '../ai'
 import { ErrorBox, Field, Loading, Modal, useAsync } from '../ui'
 
 type Named = { id: number; name: string }
@@ -147,6 +148,7 @@ function TemplateEditor({
   onUpload: (f: File) => Promise<void>
 }) {
   const [t, setT] = useState(value)
+  const ai = useAIStatus()
   const set = (patch: Partial<Template>) => setT({ ...t, ...patch })
   const toggle = (id: number) =>
     set({
@@ -163,6 +165,22 @@ function TemplateEditor({
           onSaved(t)
         }}
       >
+        {ai.enabled && (
+          <DraftPanel
+            label="Draft with AI"
+            onDraft={async (prompt) => {
+              const draft = await api.post<{ subject: string; text_body: string; html_body: string }>(
+                '/api/v1/ai/generate',
+                { kind: 'email', ...prompt },
+              )
+              set({
+                subject: draft.subject || t.subject,
+                text_body: draft.text_body || t.text_body,
+                html_body: draft.html_body || t.html_body,
+              })
+            }}
+          />
+        )}
         <Field label="Template name">
           <input value={t.name} onChange={(e) => set({ name: e.target.value })} required autoFocus />
         </Field>
@@ -286,6 +304,7 @@ export function Pages() {
 
 function PageEditor({ value, onClose, onSaved }: { value: Page; onClose: () => void; onSaved: (p: Page) => void }) {
   const [p, setP] = useState(value)
+  const ai = useAIStatus()
   const [importURL, setImportURL] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -312,6 +331,18 @@ function PageEditor({ value, onClose, onSaved }: { value: Page; onClose: () => v
           onSaved(p)
         }}
       >
+        {ai.enabled && (
+          <DraftPanel
+            label="Draft with AI"
+            onDraft={async (prompt) => {
+              const draft = await api.post<{ name: string; html: string }>('/api/v1/ai/generate', {
+                kind: 'landing_page',
+                ...prompt,
+              })
+              setP({ ...p, html: draft.html || p.html, name: draft.name || p.name })
+            }}
+          />
+        )}
         <Field label="Page name">
           <input value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} required autoFocus />
         </Field>

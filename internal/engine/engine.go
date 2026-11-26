@@ -80,6 +80,9 @@ func (e *Engine) Launch(c *store.Campaign) error {
 	if c.Status == store.StatusSending {
 		return errors.New("campaign is already sending")
 	}
+	if c.Status == store.StatusCompleted {
+		return errors.New("campaign has already completed; use resend for failed recipients")
+	}
 	if len(c.GroupIDs) == 0 {
 		return errors.New("campaign has no recipient groups")
 	}
@@ -192,6 +195,12 @@ func (e *Engine) run(ctx context.Context, c *store.Campaign) {
 			e.emit(c, store.EvCampaignStopped, "", "", "", nil)
 			return
 		default:
+		}
+		// A stop may have been issued from another process (MCP, another
+		// instance); the database is the source of truth.
+		if status, err := e.store.CampaignStatus(c.ID); err == nil && status != store.StatusSending {
+			log.Info("campaign stopped externally", "status", status)
+			return
 		}
 		if !c.SendBy.IsZero() && time.Now().After(c.SendBy.Time()) {
 			e.store.AddEvent(c.ID, "", store.EvCampaignStopped, "Send-by date reached")
@@ -306,8 +315,11 @@ func (e *Engine) render(c *store.Campaign, t *store.Template, p *store.Profile, 
 	return msg, nil
 }
 
+// isUncertainPhase is exported for tests via the engine_test package below.
 // isUncertain reports whether a failure happened after the message may have
 // been accepted. Resending these blindly would double-send to real people.
+func IsUncertain(err error) bool { return isUncertain(err) }
+
 func isUncertain(err error) bool {
 	if err == nil {
 		return false

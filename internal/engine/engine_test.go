@@ -203,3 +203,110 @@ func waitForStatus(t *testing.T, st *store.Store, id int64, want string) {
 	got, _ := st.Campaign(1, id)
 	t.Fatalf("campaign did not reach %q (status %q)", want, got.Status)
 }
+
+func TestRunningReportsActiveCampaign(t *testing.T) {
+	sender := &capture{}
+	eng, st, c := setup(t, sender)
+	c.SendRate = 3600
+	if err := st.SaveCampaign(c, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if eng.Running(c.ID) {
+		t.Fatal("campaign reported as running before launch")
+	}
+	if err := eng.Launch(c); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for !eng.Running(c.ID) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !eng.Running(c.ID) {
+		t.Fatal("running campaign not reported")
+	}
+	eng.Stop(c.ID)
+	deadline = time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if !eng.Running(c.ID) {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("campaign stayed registered after stop")
+}
+
+func TestSchedulerPicksUpDueCampaign(t *testing.T) {
+	sender := &capture{}
+	eng, st, c := setup(t, sender)
+	c.LaunchAt = store.TimeOf(time.Now().Add(-time.Minute))
+	if err := st.SaveCampaign(c, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetCampaignStatus(c.ID, store.StatusScheduled); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go eng.Start(ctx)
+	waitForStatus(t, st, c.ID, store.StatusCompleted)
+	if len(sender.messages()) != 2 {
+		t.Fatalf("scheduled campaign sent %d messages", len(sender.messages()))
+	}
+}
+
+func TestResumeAfterRestart(t *testing.T) {
+	sender := &capture{}
+	_, st, c := setup(t, sender)
+	if err := st.SaveCampaign(c, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.MaterializeTargets(c); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetCampaignStatus(c.ID, store.StatusSending); err != nil {
+		t.Fatal(err)
+	}
+
+	// A fresh engine (as after a restart) resumes what was in flight.
+	eng := engine.New(st, sender, nil, testLogger(), func(*store.Campaign) string {
+		return "https://phish.example.com"
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go eng.Start(ctx)
+	waitForStatus(t, st, c.ID, store.StatusCompleted)
+	if len(sender.messages()) != 2 {
+		t.Fatalf("resumed campaign sent %d messages", len(sender.messages()))
+	}
+}
+
+func TestLaunchRejectsCompletedCampaign(t *testing.T) {
+	eng, st, c := setup(t, &capture{})
+	if err := st.SaveCampaign(c, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetCampaignStatus(c.ID, store.StatusCompleted); err != nil {
+		t.Fatal(err)
+	}
+	c.Status = store.StatusCompleted
+	if err := eng.Launch(c); err == nil {
+		t.Fatal("completed campaign relaunched")
+	}
+}
+
+func TestUncertainClassification(t *testing.T) {
+	cases := map[string]bool{
+		"i/o timeout":                       true,
+		"read tcp: connection reset by peer": true,
+		"unexpected EOF":                    true,
+		"dial tcp 1.2.3.4:25: connection refused": false,
+		"smtp: 535 authentication failed":   false,
+		"no such host":                      false,
+	}
+	for msg, want := range cases {
+		if got := engine.IsUncertain(errors.New(msg)); got != want {
+			t.Errorf("isUncertainPhase(%q) = %v, want %v", msg, got, want)
+		}
+	}
+}

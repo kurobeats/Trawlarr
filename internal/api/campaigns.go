@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kurobeats/trawlarr/internal/notify"
 	"github.com/kurobeats/trawlarr/internal/store"
 )
 
@@ -171,6 +170,10 @@ func (s *Server) handleLaunchCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 	if c.Status == store.StatusQueued || c.Status == store.StatusSending {
 		writeError(w, http.StatusConflict, "campaign is already running")
+		return
+	}
+	if c.Status == store.StatusCompleted {
+		writeError(w, http.StatusConflict, "campaign has already completed; use resend for failed recipients")
 		return
 	}
 	if err := s.Engine.Launch(c); err != nil {
@@ -374,7 +377,3 @@ func (s *Server) handleTargetSession(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"upstream": upstream, "cookies": cookies})
 }
-
-// emitEvent lets handlers push ad-hoc events (currently unused by tracking,
-// which writes through the store directly).
-func (s *Server) emitEvent(orgID int64, p notify.Payload) { s.Hub.Emit(orgID, p) }

@@ -37,6 +37,9 @@ type Dispatcher struct {
 	queue  chan job
 }
 
+// retryBase is the first backoff step. Tests shorten it.
+var retryBase = time.Second
+
 type job struct {
 	hook    *store.Webhook
 	payload Payload
@@ -94,7 +97,7 @@ func (d *Dispatcher) deliver(j job) {
 	}
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
-			time.Sleep(time.Duration(1<<attempt) * time.Second)
+			time.Sleep(retryBase * time.Duration(1<<attempt))
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, j.hook.URL, bytes.NewReader(body))

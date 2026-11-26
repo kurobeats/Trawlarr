@@ -25,7 +25,7 @@ func Open(path string) (*sql.DB, error) {
 		}
 	}
 	// busy_timeout + WAL avoid the "database is locked" failures that plagued
-	// gophish under concurrent tracking hits.
+	// tracking endpoints under concurrent load.
 	dsn := "file:" + path + "?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {

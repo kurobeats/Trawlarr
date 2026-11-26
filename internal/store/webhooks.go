@@ -91,8 +91,7 @@ func (s *Store) SaveWebhook(w *Webhook, id int64) error {
 
 // DeleteWebhook removes a webhook.
 func (s *Store) DeleteWebhook(orgID, id int64) error {
-	_, err := s.db.Exec(`DELETE FROM webhooks WHERE id = ? AND org_id = ?`, id, orgID)
-	return err
+	return s.deleteScoped("webhooks", orgID, id)
 }
 
 // WebhooksForEvent returns enabled hooks subscribed to an event type (or "*").

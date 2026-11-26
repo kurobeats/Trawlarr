@@ -33,5 +33,17 @@
     "ignore_cert": false,
     "delete_reported": false,
     "interval_minutes": 5
+  },
+  "ai": {
+    "enabled": false,
+    "base_url": "http://127.0.0.1:11434/v1",
+    "api_key": "",
+    "model": "llama3.1:8b",
+    "timeout_seconds": 45
+  },
+  "mcp": {
+    "enabled": false,
+    "allow_writes": false,
+    "user": "admin"
   }
 }

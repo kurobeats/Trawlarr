@@ -177,8 +177,7 @@ func orEmptyMap(m map[string]string) map[string]string {
 
 // DeleteGroup removes a group and its targets.
 func (s *Store) DeleteGroup(orgID, id int64) error {
-	_, err := s.db.Exec(`DELETE FROM target_groups WHERE id = ? AND org_id = ?`, id, orgID)
-	return err
+	return s.deleteScoped("target_groups", orgID, id)
 }
 
 // ---------------------------------------------------------------- templates
@@ -293,8 +292,7 @@ func (s *Store) SaveTemplate(t *Template, id int64) error {
 
 // DeleteTemplate removes a template.
 func (s *Store) DeleteTemplate(orgID, id int64) error {
-	_, err := s.db.Exec(`DELETE FROM templates WHERE id = ? AND org_id = ?`, id, orgID)
-	return err
+	return s.deleteScoped("templates", orgID, id)
 }
 
 // -------------------------------------------------------------- attachments
@@ -344,8 +342,7 @@ func (s *Store) AttachmentContent(orgID, id int64) (string, string, []byte, erro
 
 // DeleteAttachment removes a file.
 func (s *Store) DeleteAttachment(orgID, id int64) error {
-	_, err := s.db.Exec(`DELETE FROM attachments WHERE id = ? AND org_id = ?`, id, orgID)
-	return err
+	return s.deleteScoped("attachments", orgID, id)
 }
 
 // -------------------------------------------------------------------- pages
@@ -432,8 +429,7 @@ func (s *Store) SavePage(p *Page, id int64) error {
 
 // DeletePage removes a landing page.
 func (s *Store) DeletePage(orgID, id int64) error {
-	_, err := s.db.Exec(`DELETE FROM pages WHERE id = ? AND org_id = ?`, id, orgID)
-	return err
+	return s.deleteScoped("pages", orgID, id)
 }
 
 // --------------------------------------------------------- sending profiles
@@ -564,6 +560,5 @@ func (s *Store) SetProfileTest(orgID, id int64, errText string) error {
 
 // DeleteProfile removes a sending profile.
 func (s *Store) DeleteProfile(orgID, id int64) error {
-	_, err := s.db.Exec(`DELETE FROM profiles WHERE id = ? AND org_id = ?`, id, orgID)
-	return err
+	return s.deleteScoped("profiles", orgID, id)
 }

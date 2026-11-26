@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { api, errorText, pct, timeAgo } from '../api'
+import { useAIStatus } from '../ai'
 import { Badge, ErrorBox, Field, Loading, Metric, Modal, useAsync } from '../ui'
 
 type Stats = {
@@ -333,6 +334,9 @@ export function CampaignDetail({ id, navigate }: { id: number; navigate: (p: str
   const [actionError, setActionError] = useState('')
   const [expanded, setExpanded] = useState<number | null>(null)
   const [session, setSession] = useState<{ target: number; upstream: string; cookies: Record<string, string> } | null>(null)
+  const [analysis, setAnalysis] = useState('')
+  const [analyzing, setAnalyzing] = useState(false)
+  const ai = useAIStatus()
 
   async function loadSession(targetId: number) {
     setActionError('')
@@ -356,6 +360,19 @@ export function CampaignDetail({ id, navigate }: { id: number; navigate: (p: str
       reload()
     } catch (err) {
       setActionError(errorText(err))
+    }
+  }
+
+  async function analyze() {
+    setAnalyzing(true)
+    setActionError('')
+    try {
+      const res = await api.post<{ analysis: string }>(`/api/v1/campaigns/${id}/analyze`)
+      setAnalysis(res.analysis)
+    } catch (err) {
+      setActionError(errorText(err))
+    } finally {
+      setAnalyzing(false)
     }
   }
 
@@ -403,6 +420,26 @@ export function CampaignDetail({ id, navigate }: { id: number; navigate: (p: str
         </button>
       </div>
       <ErrorBox message={actionError} />
+
+      {ai.enabled && (
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div className="toolbar">
+            <h2 style={{ margin: 0 }}>AI analysis</h2>
+            <div className="grow" />
+            <button onClick={analyze} disabled={analyzing}>
+              {analyzing ? 'Analysing…' : analysis ? 'Re-run analysis' : 'Analyse this campaign'}
+            </button>
+          </div>
+          {analysis ? (
+            <div className="prewrap">{analysis}</div>
+          ) : (
+            <p className="muted small" style={{ margin: 0 }}>
+              Sends aggregate numbers only — no recipient addresses or captured values — to the configured AI
+              endpoint.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid cols-4" style={{ marginBottom: 14 }}>
         <Metric label="Recipients" value={s.total} sub={`${s.pending} pending`} />

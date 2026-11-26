@@ -338,22 +338,6 @@ func (s *Store) AddEvent(campaignID int64, rid, evType, message string) error {
 	return err
 }
 
-// EventTargetByEmail finds a recipient row by campaign and email address,
-// used by the IMAP reporter to mark the right person.
-func (s *Store) EventTargetByEmail(campaignID int64, email string) (*CampaignTarget, error) {
-	var rid string
-	err := s.db.QueryRow(`SELECT rid FROM campaign_targets WHERE campaign_id = ? AND lower(email) = ?`,
-		campaignID, lower(email)).Scan(&rid)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	t, _, err := s.TargetByRID(rid)
-	return t, err
-}
-
 // OptOut records a global do-not-contact request.
 func (s *Store) OptOut(email string) error {
 	_, err := s.db.Exec(`INSERT INTO settings (key, value) VALUES (?, ?)
