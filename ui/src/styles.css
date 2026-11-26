@@ -1,16 +1,21 @@
 :root {
   color-scheme: dark;
-  --bg: #0c0f14;
-  --panel: #141922;
-  --panel-2: #1b2230;
-  --line: #26303f;
-  --text: #e6ecf5;
-  --muted: #8b98ab;
-  --accent: #4fa3ff;
-  --accent-2: #7c5cff;
-  --ok: #35d07f;
-  --warn: #ffb454;
-  --bad: #ff5d5d;
+  /* Ciapre (Gogh) — a warm sand-on-indigo palette. The dark slots from the
+     theme are lifted just enough to clear 4.5:1 on every surface below. */
+  --bg: #191c27;
+  --panel: #1e2230;
+  --panel-2: #252a3a;
+  --line: #434957;
+  --input: #151926;
+  --text: #aea47a;
+  --muted: #969277;
+  --accent: #cc8b3f;
+  --accent-2: #dd5e84;
+  --ok: #a6a75d;
+  --warn: #cc8b3f;
+  --bad: #c87c7a;
+  --info: #389bc8;
+  --ink: #1a1305;
   --radius: 10px;
 }
 
@@ -40,20 +45,20 @@ button {
   border-radius: 8px;
   cursor: pointer;
 }
-button:hover { border-color: #3a485c; }
-button.primary { background: var(--accent); border-color: var(--accent); color: #04101f; font-weight: 600; }
+button:hover { border-color: #46506a; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--ink); font-weight: 600; }
 button.danger { color: var(--bad); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 
 input, select, textarea {
   width: 100%;
-  background: #0f141c;
+  background: var(--input);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
 }
 textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; min-height: 120px; resize: vertical; }
-input:focus, select:focus, textarea:focus { outline: 2px solid rgba(79,163,255,.35); border-color: var(--accent); }
+input:focus, select:focus, textarea:focus { outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); border-color: var(--accent); }
 
 .layout { display: flex; min-height: 100%; }
 .sidebar {
@@ -74,7 +79,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid rgba(79,163,255,.
 
 .power-overlay {
   position: fixed; inset: 0; z-index: 50;
-  background: rgba(4, 8, 14, .82);
+  background: color-mix(in srgb, var(--bg) 82%, #000);
   display: grid; place-items: center; padding: 24px;
 }
 
@@ -106,22 +111,22 @@ td.actions { white-space: nowrap; text-align: right; }
 td.actions button { padding: 4px 8px; font-size: 12px; }
 
 .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); }
-.badge.ok { color: var(--ok); border-color: rgba(53,208,127,.4); }
-.badge.warn { color: var(--warn); border-color: rgba(255,180,84,.4); }
-.badge.bad { color: var(--bad); border-color: rgba(255,93,93,.4); }
-.badge.info { color: var(--accent); border-color: rgba(79,163,255,.4); }
+.badge.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent); }
+.badge.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
+.badge.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+.badge.info { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, transparent); }
 
 .field { margin-bottom: 12px; }
 .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
 .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
-.error { color: var(--bad); background: rgba(255,93,93,.08); border: 1px solid rgba(255,93,93,.3); padding: 8px 10px; border-radius: 8px; margin-bottom: 12px; }
+.error { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent); padding: 8px 10px; border-radius: 8px; margin-bottom: 12px; }
 .okmsg { color: var(--ok); }
 
 .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
 .toolbar .grow { flex: 1; }
 
 .modal-backdrop {
-  position: fixed; inset: 0; background: rgba(4,8,14,.72);
+  position: fixed; inset: 0; background: color-mix(in srgb, var(--bg) 78%, #000);
   display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow: auto; z-index: 10;
 }
 .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; width: min(760px, 100%); padding: 18px; }
