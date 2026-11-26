@@ -1,0 +1,29 @@
+[Unit]
+Description=Trawlarr phishing simulation server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trawlarr
+Group=trawlarr
+WorkingDirectory=/var/lib/trawlarr
+ExecStart=/usr/local/bin/trawlarr -config /var/lib/trawlarr/config.json
+Restart=on-failure
+RestartSec=5
+
+# Trawlarr never calls os.Hostname(), so the machine name cannot leak through
+# EHLO or Message-ID headers. Keep the default hostname anyway.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/trawlarr
+CapabilityBoundingSet=
+LockPersonality=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

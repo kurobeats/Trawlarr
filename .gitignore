@@ -32,3 +32,15 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Trawlarr runtime state
+config.json
+*.db
+*.db-shm
+*.db-wal
+bin/
+data/
+
+# UI dependencies (the built bundle in internal/web/dist is committed so that
+# `go build` works without Node)
+ui/node_modules/
