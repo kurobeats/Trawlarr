@@ -80,6 +80,20 @@ func Load(st *store.Store, cfg *config.Config) Settings {
 	if v, _ := st.Setting("imap_restrict_domain"); v != "" {
 		s.RestrictDomain = v
 	}
+	for key, dst := range map[string]*bool{
+		"imap_use_tls":         &s.UseTLS,
+		"imap_ignore_cert":     &s.IgnoreCert,
+		"imap_delete_reported": &s.Delete,
+	} {
+		if v, _ := st.Setting(key); v != "" {
+			*dst = v == "true" || v == "1"
+		}
+	}
+	if v, _ := st.Setting("imap_interval_minutes"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			s.Interval = time.Duration(n) * time.Minute
+		}
+	}
 	if v, _ := st.Setting("imap_enabled"); v == "false" {
 		s.Host = ""
 	}
@@ -98,16 +112,37 @@ func Load(st *store.Store, cfg *config.Config) Settings {
 // Monitor polls the report mailbox.
 type Monitor struct {
 	Settings Settings
-	Log      *slog.Logger
-	Hub      *notify.Dispatcher
+	// Reload, when set, is called before every poll so settings changed in the
+	// UI take effect without a restart.
+	Reload func() Settings
+	Log    *slog.Logger
+	Hub    *notify.Dispatcher
+}
+
+// logger never returns nil so monitoring can start before logging is wired.
+func (m *Monitor) logger() *slog.Logger {
+	if m.Log == nil {
+		return slog.Default()
+	}
+	return m.Log
+}
+
+// current returns the settings to use for this cycle.
+func (m *Monitor) current() Settings {
+	if m.Reload != nil {
+		return m.Reload()
+	}
+	return m.Settings
 }
 
 // Run polls until the context is cancelled.
 func (m *Monitor) Run(ctx context.Context, st *store.Store) {
-	if !m.Settings.Enabled() {
-		return
+	startup := m.current()
+	if !startup.Enabled() {
+		m.logger().Info("report mailbox monitor idle; no mailbox configured")
+	} else {
+		m.logger().Info("report mailbox monitor started", "host", startup.Host, "folder", startup.Folder)
 	}
-	m.Log.Info("report mailbox monitor started", "host", m.Settings.Host, "folder", m.Settings.Folder)
 	// Poll once shortly after startup, then on the interval.
 	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
@@ -116,27 +151,32 @@ func (m *Monitor) Run(ctx context.Context, st *store.Store) {
 		case <-ctx.Done():
 			return
 		case <-timer.C:
-			matched, err := m.poll(st)
-			if err != nil {
-				m.Log.Warn("mailbox poll failed", "err", err)
-			} else if matched > 0 {
-				m.Log.Info("reported messages matched", "count", matched)
+			cur := m.current()
+			if !cur.Enabled() {
+				timer.Reset(30 * time.Second)
+				continue
 			}
-			timer.Reset(m.Settings.Interval)
+			matched, err := m.poll(st, cur)
+			if err != nil {
+				m.logger().Warn("mailbox poll failed", "err", err)
+			} else if matched > 0 {
+				m.logger().Info("reported messages matched", "count", matched)
+			}
+			timer.Reset(cur.Interval)
 		}
 	}
 }
 
 // poll scans unseen messages once and returns how many were matched.
-func (m *Monitor) poll(st *store.Store) (int, error) {
-	addr := net.JoinHostPort(m.Settings.Host, strconv.Itoa(m.Settings.Port))
-	tlsConfig := &tls.Config{ServerName: m.Settings.Host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: m.Settings.IgnoreCert}
+func (m *Monitor) poll(st *store.Store, cfg Settings) (int, error) {
+	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
+	tlsConfig := &tls.Config{ServerName: cfg.Host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: cfg.IgnoreCert}
 
 	var (
 		c   *imapclient.Client
 		err error
 	)
-	if m.Settings.UseTLS || m.Settings.Port == 993 {
+	if cfg.UseTLS || cfg.Port == 993 {
 		c, err = imapclient.DialTLS(addr, tlsConfig)
 	} else {
 		c, err = imapclient.Dial(addr)
@@ -151,12 +191,12 @@ func (m *Monitor) poll(st *store.Store) (int, error) {
 	}
 	defer c.Logout()
 
-	if err := c.Login(m.Settings.Username, m.Settings.Password); err != nil {
+	if err := c.Login(cfg.Username, cfg.Password); err != nil {
 		return 0, fmt.Errorf("login: %w", err)
 	}
-	mbox, err := c.Select(m.Settings.Folder, false)
+	mbox, err := c.Select(cfg.Folder, false)
 	if err != nil {
-		return 0, fmt.Errorf("select %s: %w", m.Settings.Folder, err)
+		return 0, fmt.Errorf("select %s: %w", cfg.Folder, err)
 	}
 	if mbox.Messages == 0 {
 		return 0, nil
@@ -182,7 +222,7 @@ func (m *Monitor) poll(st *store.Store) (int, error) {
 		if msg.Envelope == nil {
 			continue
 		}
-		if !m.allowedSender(msg.Envelope) {
+		if !m.allowedSender(msg.Envelope, cfg) {
 			continue
 		}
 		rids := map[string]bool{}
@@ -196,7 +236,7 @@ func (m *Monitor) poll(st *store.Store) (int, error) {
 		}
 		if len(rids) == 0 {
 			// Not one of ours: worth a human look, but nothing to record.
-			m.Log.Info("reported message did not match a campaign",
+			m.logger().Info("reported message did not match a campaign",
 				"from", envelopeFrom(msg.Envelope), "subject", envelopeSubject(msg.Envelope))
 			continue
 		}
@@ -211,7 +251,7 @@ func (m *Monitor) poll(st *store.Store) (int, error) {
 				continue
 			}
 			if err := st.Track(target, store.EvEmailReported, "Reported via mailbox", "", "imap", nil, false); err != nil {
-				m.Log.Warn("mark reported", "rid", rid, "err", err)
+				m.logger().Warn("mark reported", "rid", rid, "err", err)
 				continue
 			}
 			matched++
@@ -223,7 +263,7 @@ func (m *Monitor) poll(st *store.Store) (int, error) {
 				})
 			}
 		}
-		if matchedAny && m.Settings.Delete {
+		if matchedAny && cfg.Delete {
 			toDelete = append(toDelete, msg.SeqNum)
 		}
 	}
@@ -275,8 +315,8 @@ func isRIDToken(s string) bool {
 }
 
 // allowedSender enforces the optional company-domain restriction.
-func (m *Monitor) allowedSender(env *imap.Envelope) bool {
-	want := strings.ToLower(strings.TrimSpace(m.Settings.RestrictDomain))
+func (m *Monitor) allowedSender(env *imap.Envelope, cfg Settings) bool {
+	want := strings.ToLower(strings.TrimSpace(cfg.RestrictDomain))
 	if want == "" || env == nil || len(env.From) == 0 {
 		return true
 	}

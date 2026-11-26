@@ -100,6 +100,9 @@ func run() error {
 		if c.URL != "" {
 			return c.URL
 		}
+		if v, _ := st.Setting("phish_public_url"); v != "" {
+			return v
+		}
 		return cfg.PhishServer.BaseURL()
 	})
 	ui, err := web.Dist()
@@ -112,7 +115,12 @@ func run() error {
 	defer stop()
 	go eng.Start(ctx)
 	go purgeSessions(ctx, st)
-	monitor := &imapmon.Monitor{Settings: imapmon.Load(st, cfg), Log: log, Hub: hub}
+	monitor := &imapmon.Monitor{
+		Settings: imapmon.Load(st, cfg),
+		Reload:   func() imapmon.Settings { return imapmon.Load(st, cfg) },
+		Log:      log,
+		Hub:      hub,
+	}
 	go monitor.Run(ctx, st)
 
 	errs := make(chan error, 2)

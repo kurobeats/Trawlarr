@@ -654,48 +654,6 @@ func (s *Server) handleDeleteWebhook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-// ---------------------------------------------------------------- settings
-
-func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
-	me := UserFrom(r)
-	org, _ := s.Store.Org(me.OrgID)
-	out := map[string]any{
-		"phish_url":    s.Cfg.PhishServer.BaseURL(),
-		"admin_url":    s.Cfg.AdminServer.BaseURL(),
-		"events":       store.AllEvents,
-		"version":      Version,
-	}
-	if org != nil {
-		out["org_name"] = org.Name
-	}
-	if v, _ := s.Store.Setting("report_mailbox"); v != "" {
-		out["report_mailbox"] = v
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
-	me := UserFrom(r)
-	var req struct {
-		OrgName       string `json:"org_name"`
-		ReportMailbox string `json:"report_mailbox"`
-	}
-	if !decodeJSON(w, r, &req) {
-		return
-	}
-	if strings.TrimSpace(req.OrgName) != "" {
-		if err := s.Store.RenameOrg(me.OrgID, strings.TrimSpace(req.OrgName)); err != nil {
-			writeStoreError(w, err)
-			return
-		}
-	}
-	if req.ReportMailbox != "" {
-		_ = s.Store.SetSetting("report_mailbox", req.ReportMailbox)
-	}
-	s.Store.Audit(me.OrgID, me.ID, "settings.updated", "", "", s.clientIP(r))
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
-}
-
 // ------------------------------------------------------------------- misc
 
 func (s *Server) handleAudit(w http.ResponseWriter, r *http.Request) {

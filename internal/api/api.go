@@ -44,8 +44,8 @@ type Server struct {
 func New(s *store.Store, e *engine.Engine, sender mail.Sender, hub *notify.Dispatcher, cfg *config.Config, log *slog.Logger, ui fs.FS) *Server {
 	srv := &Server{Store: s, Engine: e, Sender: sender, Hub: hub, Cfg: cfg, Log: log, UI: ui,
 		limiter: newLimiter(), proxyJar: newProxyJars()}
-	if cfg != nil {
-		srv.AI = ai.New(cfg.AI)
+	if cfg != nil && s != nil {
+		srv.reloadAI()
 	}
 	return srv
 }

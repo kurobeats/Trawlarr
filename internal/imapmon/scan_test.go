@@ -93,17 +93,17 @@ func TestAllowedSender(t *testing.T) {
 		return &imap.Envelope{From: []*imap.Address{{MailboxName: parts[0], HostName: parts[1]}}}
 	}
 	open := &Monitor{}
-	if !open.allowedSender(env("anyone@elsewhere.net")) {
+	if !open.allowedSender(env("anyone@elsewhere.net"), Settings{}) {
 		t.Fatal("empty restriction rejected a sender")
 	}
 	restricted := &Monitor{Settings: Settings{RestrictDomain: "corp.example"}}
-	if !restricted.allowedSender(env("alice@corp.example")) {
+	if !restricted.allowedSender(env("alice@corp.example"), restricted.Settings) {
 		t.Fatal("company sender rejected")
 	}
-	if restricted.allowedSender(env("attacker@evil.net")) {
+	if restricted.allowedSender(env("attacker@evil.net"), restricted.Settings) {
 		t.Fatal("foreign sender accepted")
 	}
-	if !restricted.allowedSender(nil) {
+	if !restricted.allowedSender(nil, restricted.Settings) {
 		t.Fatal("nil envelope should not panic")
 	}
 }

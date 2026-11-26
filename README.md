@@ -82,7 +82,14 @@ docker logs trawlarr | grep -A3 admin   # one-time password
 
 ## Configuration
 
-`config.json` is created on first run. See `config.example.json`.
+Every setting that can change at runtime is editable in **Settings** in the UI: organisation name, the tracking link
+base URL, the report mailbox (host, port, credentials, TLS, folder, sender-domain restriction, delete-after-report,
+poll interval) and the AI endpoint (URL, model, key, timeout). Changes apply without a restart — the mailbox poller
+reloads its settings every cycle and the AI client is rebuilt on save. Secrets are write-only: the UI shows whether a
+password or key is stored, never the value.
+
+`config.json` is created on first run and holds what needs a restart or should not be switchable from a session:
+listen addresses, database path, encryption key, the relay allowlist, and the MCP server. See `config.example.json`.
 
 | Key | Meaning |
 | --- | --- |

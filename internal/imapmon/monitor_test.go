@@ -141,22 +141,42 @@ func TestPollSkipsUnresolvableMailbox(t *testing.T) {
 	st := newStore(t)
 	m := &Monitor{Settings: Settings{Host: "127.0.0.1", Port: 1, Username: "x", Password: "y", Interval: time.Second}}
 	// Port 1 is not an IMAP server; poll must return an error, not panic.
-	if _, err := m.poll(st); err == nil {
+	if _, err := m.poll(st, m.Settings); err == nil {
 		t.Fatal("expected a connection error")
 	}
 }
 
-func TestRunExitsImmediatelyWhenDisabled(t *testing.T) {
+func TestRunStaysIdleWhenDisabled(t *testing.T) {
 	st := newStore(t)
+	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		(&Monitor{Settings: Settings{}}).Run(nil, st)
+		(&Monitor{Settings: Settings{}}).Run(ctx, st)
 		close(done)
 	}()
+	// No mailbox: the monitor stays idle but keeps watching for a config change.
+	time.Sleep(100 * time.Millisecond)
 	select {
 	case <-done:
-	case <-time.After(2 * time.Second):
-		t.Fatal("Run blocked with no mailbox configured")
+		t.Fatal("Run returned instead of waiting for configuration")
+	default:
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run did not stop after cancellation")
+	}
+}
+
+func TestReloadPicksUpNewSettings(t *testing.T) {
+	m := &Monitor{Settings: Settings{}}
+	if m.current().Enabled() {
+		t.Fatal("idle monitor reports enabled")
+	}
+	m.Reload = func() Settings { return Settings{Host: "imap.example.com", Username: "u"} }
+	if !m.current().Enabled() {
+		t.Fatal("reloaded settings not used")
 	}
 }
 

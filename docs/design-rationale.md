@@ -43,6 +43,14 @@ Trawlarr was designed by reading the public issue tracker of the tool it replace
 | #1843 | QR codes for mobile | Not implemented; `{{.URL}}` can be placed in any QR generator. |
 | #349 | Multiple TLS landing pages | One listener; terminate TLS per hostname in a proxy. |
 
+## Settings in the UI
+
+The upstream tool exposed account, reporting and user settings in a settings page and kept service configuration in a
+file. Trawlarr does the same, with a wider split: everything that can change safely at runtime is editable in the UI
+(organisation name, tracking base URL, IMAP reporting, AI endpoint), everything that needs a restart or is a safety
+boundary stays in `config.json` (listen addresses, database path, encryption key, relay allowlist, MCP). Secrets are
+never returned to the browser; the UI reports only whether one is stored.
+
 ## Deliberate differences
 
 | Topic | Typical implementation | Trawlarr |

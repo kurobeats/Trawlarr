@@ -87,6 +87,9 @@ func newHarness(t *testing.T) *harness {
 		if c.URL != "" {
 			return c.URL
 		}
+		if v, _ := st.Setting("phish_public_url"); v != "" {
+			return v
+		}
 		return cfg.PhishServer.BaseURL()
 	})
 	ui := fstest.MapFS{
