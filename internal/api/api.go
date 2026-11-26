@@ -87,6 +87,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("PUT /api/v1/pages/{id}", s.operator(s.handleUpdatePage))
 	mux.Handle("DELETE /api/v1/pages/{id}", s.operator(s.handleDeletePage))
 	mux.Handle("POST /api/v1/pages/import-url", s.operator(s.handleImportLandingPage))
+	mux.Handle("GET /api/v1/pages/{id}/preview", s.viewer(s.handlePreviewPage))
 
 	mux.Handle("GET /api/v1/profiles", s.viewer(s.handleListProfiles))
 	mux.Handle("POST /api/v1/profiles", s.operator(s.handleCreateProfile))

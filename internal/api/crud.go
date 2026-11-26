@@ -313,9 +313,33 @@ func (s *Server) handleImportLandingPage(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"html": html, "source_url": finalURL})
 }
 
-// FetchLandingPage downloads and absolutises a page's links.
+// FetchLandingPage downloads and absolutises a page's links. A bare host is
+// tried over https first, then http, then the error is reported.
 func FetchLandingPage(ctx context.Context, raw string) (string, string, error) {
-	u, err := url.Parse(strings.TrimSpace(raw))
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", "", errors.New("a URL is required")
+	}
+	candidates := []string{raw}
+	if !strings.Contains(raw, "://") {
+		candidates = []string{"https://" + raw, "http://" + raw}
+	}
+	var lastErr error
+	for _, candidate := range candidates {
+		html, finalURL, err := fetchLandingPage(ctx, candidate)
+		if err == nil {
+			return html, finalURL, nil
+		}
+		lastErr = err
+	}
+	if len(candidates) > 1 {
+		return "", "", fmt.Errorf("could not reach %s over https or http: %w", raw, lastErr)
+	}
+	return "", "", lastErr
+}
+
+func fetchLandingPage(ctx context.Context, raw string) (string, string, error) {
+	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return "", "", errors.New("a valid http(s) URL is required")
 	}

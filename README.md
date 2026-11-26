@@ -40,7 +40,7 @@ docker logs trawlarr | grep -A3 admin    # one-time password
 
 **Campaigns** — launch now, schedule, or spread delivery to a send-by date. Rate limit and jitter when you want direct control. Stop, resume, resend only the failures. Each recipient ends up `sent`, `failed` or `uncertain`; the last one means the SMTP session broke after the message may have been handed over, so a timeout never triggers a blind resend.
 
-**Content** — templates with the usual placeholders (`{{.FirstName}}`, `{{.URL}}`, `{{.Tracker}}`, `{{.BaseURL}}`, `{{.OptOutURL}}`, `{{.ReportURL}}`), or import an existing `.eml` with every link pointed at `{{.URL}}`. Attachments are templated inside as well as in the filename, including Office documents. Landing pages can be written or cloned from a live URL; forms are repointed at the capture endpoint automatically.
+**Content** — templates with the usual placeholders (`{{.FirstName}}`, `{{.URL}}`, `{{.Tracker}}`, `{{.BaseURL}}`, `{{.OptOutURL}}`, `{{.ReportURL}}`), or import an existing `.eml` with every link pointed at `{{.URL}}`. Attachments are templated inside as well as in the filename, including Office documents. Landing pages can be written, cloned from a live URL (`https://` assumed, `http://` as a fallback) or previewed in a sandboxed frame; forms are repointed at the capture endpoint automatically.
 
 **Access** — `admin`, `operator` and `viewer` roles enforced on every endpoint; Argon2id passwords, TOTP, hashed API keys, session rotation, audit log.
 

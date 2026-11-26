@@ -270,6 +270,7 @@ type Page = Named & {
 export function Pages() {
   const crud = useCrud<Page>('/api/v1/pages')
   const [editing, setEditing] = useState<Page | null>(null)
+  const [preview, setPreview] = useState<Page | null>(null)
 
   return (
     <ListShell
@@ -299,6 +300,7 @@ export function Pages() {
               </td>
               <td className="muted small">{p.redirect_url || '—'}</td>
               <td className="actions">
+                <button onClick={() => setPreview(p)}>Preview</button>{' '}
                 <button onClick={() => setEditing(p)}>Edit</button>{' '}
                 <button className="danger" onClick={() => crud.remove(p.id, p.name)}>
                   Delete
@@ -323,6 +325,31 @@ export function Pages() {
             if (await crud.save(p, p.id || undefined)) setEditing(null)
           }}
         />
+      )}
+      {preview && (
+        <Modal title={`Preview: ${preview.name}`} onClose={() => setPreview(null)} wide>
+          <iframe
+            title={`Preview of ${preview.name}`}
+            src={`/api/v1/pages/${preview.id}/preview`}
+            // Strictest sandbox: no scripts, no forms, no same-origin access.
+            sandbox=""
+            style={{
+              width: '100%',
+              height: '68vh',
+              border: '1px solid var(--line)',
+              borderRadius: 8,
+              background: '#fff',
+            }}
+          />
+          <div className="row" style={{ justifyContent: 'space-between', marginTop: 10 }}>
+            <span className="hint">
+              Rendered with sample values. Scripts and form submission are disabled in the preview.
+            </span>
+            <a className="badge info" href={`/api/v1/pages/${preview.id}/preview`} target="_blank" rel="noreferrer" style={{ padding: '6px 12px' }}>
+              Open in a new tab
+            </a>
+          </div>
+        </Modal>
       )}
     </ListShell>
   )
@@ -372,7 +399,10 @@ function PageEditor({ value, onClose, onSaved }: { value: Page; onClose: () => v
         <Field label="Page name">
           <input value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} required autoFocus />
         </Field>
-        <Field label="Clone from URL" hint="Imports a live page and rewrites its assets to absolute URLs.">
+        <Field
+          label="Clone from URL"
+          hint="Imports a live page and rewrites its assets to absolute URLs. https:// is assumed; http:// is tried if that fails."
+        >
           <div className="row">
             <input
               style={{ flex: 1 }}
