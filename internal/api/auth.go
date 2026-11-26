@@ -112,7 +112,7 @@ func (s *Server) meResponse(u *store.User) map[string]any {
 	if org, err := s.Store.Org(u.OrgID); err == nil {
 		out["org_name"] = org.Name
 	}
-	out["phish_url"] = s.Cfg.PhishServer.BaseURL()
+	out["phish_url"] = s.phishBaseURL()
 	out["role_rank"] = store.Rank(u.Role)
 	return out
 }

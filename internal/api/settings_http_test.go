@@ -217,6 +217,11 @@ func TestTrackingBaseURLOverride(t *testing.T) {
 	if got["phish_url"] != "https://training.example.com" {
 		t.Fatalf("tracking base = %v", got["phish_url"])
 	}
+	// /me must agree with /settings, since the UI shows it in the sidebar.
+	me := h.expect(c, http.MethodGet, "/api/v1/me", nil, http.StatusOK)
+	if me["phish_url"] != "https://training.example.com" {
+		t.Fatalf("me.phish_url = %v", me["phish_url"])
+	}
 
 	// New emails use the override when the campaign does not set its own URL.
 	id := h.seedCampaign(t, c)
