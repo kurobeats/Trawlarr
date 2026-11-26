@@ -132,7 +132,7 @@ func TestChallengeHandler(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "challenges"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "challenges", "token123"), []byte("token123.keyauth"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "challenges", "token123"), []byte("token123.keyauth-456"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	profiles := func() []Profile { return []Profile{cfg} }
@@ -140,7 +140,7 @@ func TestChallengeHandler(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://training.example.com/.well-known/acme-challenge/token123", nil))
-	if rec.Code != http.StatusOK || rec.Body.String() != "token123.keyauth" {
+	if rec.Code != http.StatusOK || rec.Body.String() != "token123.keyauth-456" {
 		t.Fatalf("challenge response = %d %q", rec.Code, rec.Body.String())
 	}
 
@@ -233,7 +233,7 @@ func TestChallengeHandlerAcrossProfiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(two, "challenges"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(two, "challenges", "tok2"), []byte("keyauth2"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(two, "challenges", "tok2"), []byte("tokenabc.thumbprint-123_xyz"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	h := ChallengeHandler(func() []Profile {
@@ -241,7 +241,7 @@ func TestChallengeHandlerAcrossProfiles(t *testing.T) {
 	})
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://x/.well-known/acme-challenge/tok2", nil))
-	if rec.Code != http.StatusOK || rec.Body.String() != "keyauth2" {
+	if rec.Code != http.StatusOK || rec.Body.String() != "tokenabc.thumbprint-123_xyz" {
 		t.Fatalf("challenge from second profile = %d %q", rec.Code, rec.Body.String())
 	}
 }

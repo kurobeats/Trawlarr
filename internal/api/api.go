@@ -17,6 +17,7 @@ import (
 	"github.com/kurobeats/trawlarr/internal/ai"
 	"github.com/kurobeats/trawlarr/internal/config"
 	"github.com/kurobeats/trawlarr/internal/engine"
+	"github.com/kurobeats/trawlarr/internal/geo"
 	"github.com/kurobeats/trawlarr/internal/mail"
 	"github.com/kurobeats/trawlarr/internal/notify"
 	"github.com/kurobeats/trawlarr/internal/store"
@@ -36,9 +37,11 @@ type Server struct {
 	UI     fs.FS
 	AI     *ai.Client
 	Power  *PowerControl
+	Geo    *geo.Resolver
 
 	limiter  *limiter
 	proxyJar *proxyJars
+	geoDL    geoipDownload
 	tlsMu    sync.Mutex // serialises certificate issuance
 }
 
@@ -69,6 +72,11 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/dashboard", s.viewer(s.handleDashboard))
 	mux.Handle("GET /api/v1/audit", s.viewer(s.handleAudit))
 	mux.Handle("POST /api/v1/power/{action}", s.admin(s.handlePowerAction))
+	mux.Handle("GET /api/v1/geoip", s.viewer(s.handleGetGeoIP))
+	mux.Handle("POST /api/v1/geoip/upload", s.operator(s.handleUploadGeoIP))
+	mux.Handle("POST /api/v1/geoip/download", s.admin(s.handleDownloadGeoIP))
+	mux.Handle("POST /api/v1/geoip/lookup", s.viewer(s.handleGeoIPLookup))
+
 	mux.Handle("GET /api/v1/certificates", s.viewer(s.handleListCertificates))
 	mux.Handle("POST /api/v1/certificates", s.operator(s.handleCreateCertificate))
 	mux.Handle("GET /api/v1/certificates/{id}", s.viewer(s.handleGetCertificate))
@@ -207,7 +215,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("X-Frame-Options", "DENY")
-		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		h.Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: https://*.tile.openstreetmap.org; style-src 'self' 'unsafe-inline'; script-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
 		next.ServeHTTP(w, r)
 	})
 }

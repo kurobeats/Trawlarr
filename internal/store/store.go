@@ -23,6 +23,8 @@ var (
 type Store struct {
 	db  *sql.DB
 	box *secret.Box
+	// locate resolves an IP to a location; nil when GeoIP is not installed.
+	locate func(ip string) (lat, lon float64, city, country string, ok bool)
 }
 
 // New wraps a database handle.
@@ -32,6 +34,12 @@ func New(db *sql.DB, box *secret.Box) *Store {
 
 // Vector renders a copy of the captured form data for API callers.
 type Vector map[string]any
+
+// SetLocator installs the GeoIP lookup used when recording the first event for
+// a recipient. Passing nil disables the annotation.
+func (s *Store) SetLocator(fn func(ip string) (lat, lon float64, city, country string, ok bool)) {
+	s.locate = fn
+}
 
 // HashToken returns the hex sha256 of a bearer token, which is all we keep.
 func HashToken(token string) string {

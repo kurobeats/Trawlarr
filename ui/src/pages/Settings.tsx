@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, errorText, timeAgo } from '../api'
 import { ErrorBox, Field, Loading, useAsync } from '../ui'
 import type { Me } from '../App'
@@ -43,7 +43,7 @@ type SettingsData = {
   mcp: MCPSettings
 }
 
-type Tab = 'account' | 'application' | 'reporting' | 'ai' | 'mcp' | 'team' | 'audit'
+type Tab = 'account' | 'application' | 'reporting' | 'ai' | 'geoip' | 'mcp' | 'team' | 'audit'
 
 export function Settings({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
   const [tab, setTab] = useState<Tab>('account')
@@ -75,6 +75,11 @@ export function Settings({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
           </button>
         )}
         {isAdmin && (
+          <button className={tab === 'geoip' ? 'active' : ''} onClick={() => setTab('geoip')}>
+            GeoIP
+          </button>
+        )}
+        {isAdmin && (
           <button className={tab === 'mcp' ? 'active' : ''} onClick={() => setTab('mcp')}>
             MCP
           </button>
@@ -92,13 +97,14 @@ export function Settings({ me, onMe }: { me: Me; onMe: (m: Me) => void }) {
       <ErrorBox message={settings.error} />
 
       {tab === 'account' && <Account me={me} onMe={onMe} />}
-      {isAdmin && (tab === 'application' || tab === 'reporting' || tab === 'ai' || tab === 'mcp') && (
+      {isAdmin && (tab === 'application' || tab === 'reporting' || tab === 'ai' || tab === 'mcp' || tab === 'geoip') && (
         settings.loading ? <Loading /> :
         settings.data && (
           <>
             {tab === 'application' && <Application data={settings.data} onSaved={load} />}
             {tab === 'reporting' && <Reporting data={settings.data} onSaved={load} />}
             {tab === 'ai' && <AI data={settings.data} onSaved={load} />}
+            {tab === 'geoip' && <GeoIP />}
             {tab === 'mcp' && <MCP data={settings.data} onSaved={load} />}
           </>
         )
@@ -479,6 +485,193 @@ function AI({ data, onSaved }: { data: SettingsData; onSaved: () => void }) {
           {note && <span className="hint" style={{ marginLeft: 10 }}>{note}</span>}
         </div>
       </form>
+    </div>
+  )
+}
+
+// ----------------------------------------------------------------------- GeoIP
+
+type GeoDBInfo = {
+  installed: boolean
+  path: string
+  size: number
+  modified: string | null
+  database_type?: string
+  description?: string
+  error?: string
+}
+
+type GeoStatus = {
+  available: boolean
+  database: GeoDBInfo | null
+  download?: { running: boolean; message: string; url: string; error: string }
+  hint?: string
+}
+
+function GeoIP() {
+  const [status, setStatus] = useState<GeoStatus | null>(null)
+  const [error, setError] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [testIP, setTestIP] = useState('')
+  const [testResult, setTestResult] = useState<string>('')
+  const [downloading, setDownloading] = useState(false)
+
+  async function refresh() {
+    try {
+      setStatus(await api.get<GeoStatus>('/api/v1/geoip'))
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }
+
+  useEffect(() => {
+    refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Poll while a download runs in the background.
+  useEffect(() => {
+    if (!downloading) return
+    const timer = window.setInterval(async () => {
+      try {
+        const s = await api.get<GeoStatus>('/api/v1/geoip')
+        setStatus(s)
+        if (!s.download?.running) {
+          setDownloading(false)
+          if (s.download?.error) setError(s.download.error)
+          else setNote(s.download?.message || 'Installed.')
+        }
+      } catch {
+        // keep polling
+      }
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [downloading])
+
+  async function upload(file: File) {
+    setBusy(true)
+    setError('')
+    setNote('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch('/api/v1/geoip/upload', { method: 'POST', body: form, credentials: 'same-origin' })
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'upload failed')
+      setStatus(body)
+      setNote('Database installed.')
+    } catch (err) {
+      setError(errorText(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function download() {
+    setError('')
+    setNote('')
+    try {
+      await api.post('/api/v1/geoip/download')
+      setDownloading(true)
+      setNote('Downloading the DB-IP Lite database…')
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }
+
+  async function lookup(e: React.FormEvent) {
+    e.preventDefault()
+    setTestResult('')
+    setError('')
+    try {
+      const res = await api.post<{ found: boolean; ip: string; location?: { city: string; country: string; latitude: number; longitude: number } }>(
+        '/api/v1/geoip/lookup',
+        { ip: testIP },
+      )
+      setTestResult(
+        res.found && res.location
+          ? `${res.ip} → ${res.location.city || '?'}, ${res.location.country || '?'} (${res.location.latitude.toFixed(2)}, ${res.location.longitude.toFixed(2)})`
+          : `${res.ip} → not in the database`,
+      )
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }
+
+  const db = status?.database
+  return (
+    <div className="card">
+      <h2>GeoIP</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Annotates the first open or click of each recipient with a location and draws it on the campaign map. Lookups
+        happen on this server — no address is sent to a third party.
+      </p>
+      <ErrorBox message={error} />
+      {note && <p className="hint okmsg">{note}</p>}
+
+      <h3>Installed database</h3>
+      {!db?.installed ? (
+        <p className="muted">No database installed. Nothing is geolocated until one is.</p>
+      ) : (
+        <table style={{ marginBottom: 12 }}>
+          <tbody>
+            <tr>
+              <td className="muted">Type</td>
+              <td className="mono">{db.database_type || 'unknown'}</td>
+            </tr>
+            <tr>
+              <td className="muted">Description</td>
+              <td>{db.description || '—'}</td>
+            </tr>
+            <tr>
+              <td className="muted">Size</td>
+              <td className="mono">{(db.size / (1024 * 1024)).toFixed(1)} MB</td>
+            </tr>
+            <tr>
+              <td className="muted">Updated</td>
+              <td className="mono">{db.modified ? timeAgo(db.modified) : '—'}</td>
+            </tr>
+            <tr>
+              <td className="muted">Path</td>
+              <td className="mono small">{db.path}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+      {db?.error && <div className="error">{db.error}</div>}
+
+      <div className="row" style={{ alignItems: 'center' }}>
+        <button onClick={download} disabled={downloading}>
+          {downloading ? 'Downloading…' : 'Download DB-IP Lite'}
+        </button>
+        <input
+          type="file"
+          accept=".mmdb,.gz"
+          disabled={busy}
+          onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+        />
+      </div>
+
+      <p className="hint">
+        <strong>Download</strong> fetches the free DB-IP Lite city database (~100 MB, no account) as its monthly
+        release from <span className="mono">db-ip.com</span>; it is licensed CC BY 4.0 and needs attribution if you
+        publish maps. <strong>Upload</strong> accepts any MaxMind-format city database instead — for example MaxMind's
+        own GeoLite2-City (free account) or a commercial GeoIP2 file.
+      </p>
+
+      <h3 style={{ marginTop: 18 }}>Check an address</h3>
+      <form onSubmit={lookup} className="row" style={{ alignItems: 'flex-end', maxWidth: 420 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="IP address">
+            <input value={testIP} onChange={(e) => setTestIP(e.target.value)} placeholder="203.0.113.42" />
+          </Field>
+        </div>
+        <button type="submit" style={{ marginBottom: 12 }}>
+          Look up
+        </button>
+      </form>
+      {testResult && <div className="mono small">{testResult}</div>}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { api, errorText, pct, timeAgo } from '../api'
 import { useAIStatus } from '../ai'
+import { CampaignMap, type MapPoint } from '../map'
 import { Badge, ErrorBox, Field, Loading, Metric, Modal, useAsync } from '../ui'
 
 type Stats = {
@@ -53,6 +54,10 @@ type Target = {
   reported_at: string | null
   data?: Record<string, unknown>
   fields?: string[]
+  latitude?: number
+  longitude?: number
+  city?: string
+  country?: string
 }
 
 type Event = { id: number; type: string; message: string; email: string; at: string; ip: string }
@@ -354,6 +359,21 @@ export function CampaignDetail({ id, navigate }: { id: number; navigate: (p: str
   }
 
   const rows = useMemo(() => data?.results ?? [], [data])
+  const mapPoints: MapPoint[] = useMemo(
+    () =>
+      rows
+        .filter((t) => t.latitude && t.longitude)
+        .map((t) => ({
+          email: t.email,
+          city: t.city ?? '',
+          country: t.country ?? '',
+          latitude: t.latitude as number,
+          longitude: t.longitude as number,
+          status: t.status,
+          at: t.opened_at ?? t.clicked_at ?? t.submitted_at,
+        })),
+    [rows],
+  )
 
   async function act(path: string, confirmText?: string) {
     if (confirmText && !window.confirm(confirmText)) return
@@ -454,6 +474,17 @@ export function CampaignDetail({ id, navigate }: { id: number; navigate: (p: str
         <Metric label="Uncertain" value={s.uncertain} sub="may have been delivered" />
         <Metric label="Opted out" value={s.opted_out} />
       </div>
+
+      {mapPoints.length > 0 && (
+        <div className="card">
+          <h2>Where they opened</h2>
+          <CampaignMap points={mapPoints} />
+          <p className="hint" style={{ marginBottom: 0 }}>
+            Pins come from a GeoIP database installed under Settings → GeoIP. Locations are resolved on this server;
+            no address is sent anywhere.
+          </p>
+        </div>
+      )}
 
       <div className="card">
         <h2>Recipients</h2>

@@ -114,7 +114,8 @@ func Request(ctx context.Context, cfg Profile, log func(string, ...any)) (*Issue
 			return nil, err
 		}
 		tokenFile := filepath.Join(challengeDir(cfg), challenge.Token)
-		if err := os.WriteFile(tokenFile, []byte(response), 0o644); err != nil {
+		// #nosec G306 -- the challenge file holds a public key authorization.
+		if err := os.WriteFile(tokenFile, []byte(response), 0o600); err != nil {
 			return nil, err
 		}
 		if log != nil {
@@ -269,6 +270,7 @@ func pickHTTP01(authz *acme.Authorization) *acme.Challenge {
 // same registration instead of creating a new account every time.
 func loadOrCreateAccountKey(cfg Profile) (crypto.Signer, error) {
 	path := filepath.Join(cacheDirOf(cfg), "acme_account.key")
+	// #nosec G304 -- path is the cache directory plus a fixed file name.
 	if raw, err := os.ReadFile(path); err == nil {
 		if block, _ := pem.Decode(raw); block != nil {
 			if key, err := x509.ParseECPrivateKey(block.Bytes); err == nil {

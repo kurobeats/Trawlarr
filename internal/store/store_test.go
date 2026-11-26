@@ -225,3 +225,54 @@ func TestSessionRoundTrip(t *testing.T) {
 		t.Fatal("deleted session still resolves")
 	}
 }
+
+func TestGeoAnnotationOnFirstInteraction(t *testing.T) {
+	s := newStore(t)
+	orgID := int64(1)
+	calls := 0
+	s.SetLocator(func(ip string) (float64, float64, string, string, bool) {
+		calls++
+		if ip == "203.0.113.5" {
+			return 51.5, -0.12, "London", "United Kingdom", true
+		}
+		return 0, 0, "", "", false
+	})
+
+	g := &store.Group{OrgID: orgID, Name: "G", Targets: []store.Target{{Email: "alice@example.com"}}}
+	if err := s.SaveGroup(g, 0); err != nil {
+		t.Fatal(err)
+	}
+	c := &store.Campaign{OrgID: orgID, Name: "C", GroupIDs: []int64{g.ID}}
+	if err := s.SaveCampaign(c, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.MaterializeTargets(c); err != nil {
+		t.Fatal(err)
+	}
+	targets, _ := s.CampaignTargets(c.ID)
+	target := targets[0]
+
+	if err := s.Track(&target, store.EvEmailOpened, "open", "203.0.113.5", "ua", nil, false); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Campaign(orgID, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := got.Targets[0]
+	if row.Latitude == 0 || row.Longitude == 0 || row.City != "London" || row.Country != "United Kingdom" {
+		t.Fatalf("location not stored: %+v", row)
+	}
+
+	// A second interaction must not move the pin.
+	if err := s.Track(&target, store.EvLinkClicked, "click", "198.51.100.2", "ua", nil, false); err != nil {
+		t.Fatal(err)
+	}
+	got, _ = s.Campaign(orgID, c.ID)
+	if got.Targets[0].City != "London" {
+		t.Fatalf("first location overwritten: %+v", got.Targets[0])
+	}
+	if calls < 2 {
+		t.Fatalf("locator calls = %d", calls)
+	}
+}

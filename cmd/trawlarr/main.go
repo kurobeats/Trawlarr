@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"github.com/kurobeats/trawlarr/internal/config"
 	"github.com/kurobeats/trawlarr/internal/db"
 	"github.com/kurobeats/trawlarr/internal/engine"
+	"github.com/kurobeats/trawlarr/internal/geo"
 	"github.com/kurobeats/trawlarr/internal/imapmon"
 	"github.com/kurobeats/trawlarr/internal/mail"
 	"github.com/kurobeats/trawlarr/internal/notify"
@@ -94,6 +96,18 @@ func run() error {
 		return err
 	}
 
+	// GeoIP is optional: a database the operator installs under the data dir
+	// annotates the first interaction of each recipient.
+	geoPath := filepath.Join(cfg.DataDir, "geoip.mmdb")
+	resolver := geo.New(geoPath)
+	if err := resolver.Load(); err == nil {
+		st.SetLocator(resolver.Locate)
+		log.Info("geoip database loaded", "path", geoPath)
+	} else if !os.IsNotExist(err) {
+		log.Warn("geoip database unreadable; continuing without it", "path", geoPath, "err", err)
+	}
+	defer resolver.Close()
+
 	api.Version = version
 	hub := notify.NewDispatcher(st, log, 2)
 	sender := &mail.SMTP{Log: log}
@@ -111,6 +125,7 @@ func run() error {
 		return err
 	}
 	srv := api.New(st, eng, sender, hub, cfg, log, ui)
+	srv.Geo = resolver
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

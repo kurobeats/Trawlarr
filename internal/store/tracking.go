@@ -270,6 +270,13 @@ func (s *Store) Track(t *CampaignTarget, evType, message, ip, ua string, data *C
 	if ip != "" {
 		sets = append(sets, "ip = ?", "user_agent = ?")
 		args = append(args, ip, ua)
+		// Annotate the first interaction with a location, resolved locally.
+		if s.locate != nil && t.Latitude == 0 && t.Longitude == 0 {
+			if lat, lon, city, country, ok := s.locate(ip); ok {
+				sets = append(sets, "latitude = ?", "longitude = ?", "city = ?", "country = ?")
+				args = append(args, lat, lon, city, country)
+			}
+		}
 	}
 	args = append(args, t.RID)
 	// #nosec G202 -- sets are built from fixed column names; values are bound.

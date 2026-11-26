@@ -107,6 +107,10 @@ type CampaignTarget struct {
 	ClickedAt   Time              `json:"clicked_at"`
 	SubmittedAt Time              `json:"submitted_at"`
 	ReportedAt  Time              `json:"reported_at"`
+	Latitude    float64           `json:"latitude,omitempty"`
+	Longitude   float64           `json:"longitude,omitempty"`
+	City        string            `json:"city,omitempty"`
+	Country     string            `json:"country,omitempty"`
 	Fields      []string          `json:"fields,omitempty"`
 	Data        Vector            `json:"data,omitempty"`
 	IP          string            `json:"ip"`
@@ -265,7 +269,8 @@ func (s *Store) Campaign(orgID, id int64) (*Campaign, error) {
 // CampaignTargets lists recipient rows for a campaign.
 func (s *Store) CampaignTargets(campaignID int64) ([]CampaignTarget, error) {
 	rows, err := s.db.Query(`SELECT id, campaign_id, rid, email, first_name, last_name, position, custom, status, error,
-		attempts, sent_at, opened_at, clicked_at, submitted_at, reported_at, submit_data, capture_fields, ip, user_agent
+		attempts, sent_at, opened_at, clicked_at, submitted_at, reported_at, submit_data, capture_fields, ip, user_agent,
+		latitude, longitude, city, country
 		FROM campaign_targets WHERE campaign_id = ? ORDER BY email`, campaignID)
 	if err != nil {
 		return nil, err
@@ -278,7 +283,8 @@ func (s *Store) CampaignTargets(campaignID int64) ([]CampaignTarget, error) {
 		var sentAt, openedAt, clickedAt, submittedAt, reportedAt int64
 		if err := rows.Scan(&t.ID, &t.CampaignID, &t.RID, &t.Email, &t.FirstName, &t.LastName, &t.Position, &custom,
 			&t.Status, &t.Error, &t.Attempts, &sentAt, &openedAt, &clickedAt, &submittedAt, &reportedAt,
-			&data, &fields, &t.IP, &t.UserAgent); err != nil {
+			&data, &fields, &t.IP, &t.UserAgent,
+			&t.Latitude, &t.Longitude, &t.City, &t.Country); err != nil {
 			return nil, err
 		}
 		t.Custom = jsonMap(custom)

@@ -11,6 +11,7 @@ Two places: **Settings** in the UI for anything that can change while the server
 | Settings → Reporting | Mailbox monitoring: enabled, host, port, username, password, TLS, ignore certificates, folder, sender-domain restriction, delete after processing, poll interval |
 | Settings → AI | Enabled, base URL, model, API key, timeout |
 | Certificates | One profile per hostname set: domains, contact email, staging CA, cache directory, challenge address. Request and renew are buttons, never automatic. |
+| Settings → GeoIP | Install a MaxMind-format city database, or upload one; look up a test address |
 | Settings → MCP | Enable the stdio MCP server, allow tools that change data, choose the account tool calls act as |
 | Settings → Team | Users and roles |
 | Settings → Audit log | Who did what |
@@ -30,6 +31,18 @@ The tracking base URL applies to emails sent afterwards. Campaigns can override 
 | Shut down server | Graceful stop: listeners close, the campaign runner exits. Exit code is 0, so `Restart=on-failure` supervisors leave it down until you start it. |
 
 Both are written to the audit log as `power.restart` / `power.shutdown`.
+
+## GeoIP data
+
+The location database is a separate file, not a setting: `data/geoip.mmdb` under the data directory (`geoip.mmdb` next to the binary if `data_dir` is unset).
+
+| Source | How | Licence |
+| --- | --- | --- |
+| DB-IP Lite City | **Download** in Settings → GeoIP, fetched monthly from `download.db-ip.com`, no account | CC BY 4.0, attribution required if you publish the maps |
+| MaxMind GeoLite2-City | Free account at maxmind.com, then **Upload** the `.mmdb` | MaxMind EULA |
+| MaxMind GeoIP2 City | Commercial, upload the same way | Commercial |
+
+Anything in the MaxMind DB format works. Uploads replace the file atomically and are validated first, so a bad download cannot break a working install. Lookups run locally with `maxminddb`; the UI map uses OpenStreetMap raster tiles, which is why the admin CSP allows `*.tile.openstreetmap.org`.
 
 ## In config.json
 

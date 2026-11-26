@@ -46,6 +46,8 @@ docker logs trawlarr | grep -A3 admin    # one-time password
 
 **TLS** — certificate profiles: per set of hostnames, requested and renewed from a button, served by SNI, and selectable per campaign. Static certs from `config.json` still work.
 
+**GeoIP** — install a MaxMind-format city database (the free DB-IP Lite file downloads from the UI, or upload GeoLite2/GeoIP2) and each recipient's first open or click is annotated with a location. Campaign pages draw the pins on an OpenStreetMap map. Lookups are local; no address leaves the server.
+
 **Integrations** — signed webhooks for every event, an IMAP report mailbox, a REST API, and a Model Context Protocol server for AI assistants.
 
 **Privacy** — a submission records *which* fields were filled, not their contents. Storing values is per-page, opt-in, and encrypted; passwords need a second opt-in. `/optout` keeps an address out of future campaigns.
