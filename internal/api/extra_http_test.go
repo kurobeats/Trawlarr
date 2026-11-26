@@ -79,8 +79,10 @@ func TestResendAfterFailure(t *testing.T) {
 	}
 	before := len(h.sender.sent)
 	resend := h.expect(c, http.MethodPost, "/api/v1/campaigns/"+itoa(id)+"/resend", nil, http.StatusOK)
-	if resend["status"] != "queued" {
-		t.Fatalf("resend status = %v", resend["status"])
+	// The runner may already have picked the campaign up by the time the
+	// handler re-reads it, so either state is correct here.
+	if status := resend["status"]; status != "queued" && status != "sending" {
+		t.Fatalf("resend status = %v", status)
 	}
 	h.waitCompleted(c, id)
 	after := len(h.sender.sent)
